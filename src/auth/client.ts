@@ -102,12 +102,11 @@ export class AuthClient {
     return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`);
   }
 
-  async getMyApiKeys(): Promise<ApiKey[]> {
-    const response = await this.http.get<{ keys: ApiKey[] }>('/auth/api-keys/self');
-    return response.keys;
+  async getCurrentApiKey(): Promise<ApiKey> {
+    return this.http.get<ApiKey>('/auth/api-keys/self');
   }
 
-  async rotateSelfApiKey(): Promise<CreateApiKeyResponse> {
+  async rotateCurrentApiKey(): Promise<CreateApiKeyResponse> {
     return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate');
   }
 
