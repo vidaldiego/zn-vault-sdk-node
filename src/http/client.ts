@@ -148,10 +148,14 @@ export class HttpClient {
     return new Promise((resolve, reject) => {
       const url = new URL(options.path, this.baseUrl);
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
         ...options.headers,
       };
+
+      // Only set Content-Type for requests that have a body
+      if (options.body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
 
       if (this.apiKey) {
         headers['X-API-Key'] = this.apiKey;

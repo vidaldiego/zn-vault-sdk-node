@@ -28,7 +28,12 @@ export class TenantsClient {
   }
 
   async get(id: string): Promise<Tenant> {
-    return this.http.get<Tenant>(`/v1/tenants/${id}`);
+    const response = await this.http.get<{ success: boolean; data: Tenant } | Tenant>(`/v1/tenants/${id}`);
+    // API returns {success: true, data: {...}}
+    if (response && typeof response === 'object' && 'data' in response && 'success' in response) {
+      return response.data;
+    }
+    return response as Tenant;
   }
 
   async update(id: string, request: UpdateTenantRequest): Promise<Tenant> {

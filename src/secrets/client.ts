@@ -17,9 +17,6 @@ export class SecretsClient {
   async create(request: CreateSecretRequest): Promise<Secret> {
     return this.http.post<Secret>('/v1/secrets', {
       alias: request.alias,
-      tenant: request.tenant,
-      env: request.env,
-      service: request.service,
       type: request.type,
       data: request.data,
       tags: request.tags,
@@ -31,8 +28,9 @@ export class SecretsClient {
     return this.http.get<Secret>(`/v1/secrets/${id}/meta`);
   }
 
-  async getByAlias(tenant: string, alias: string): Promise<Secret> {
-    return this.http.get<Secret>(`/v1/secrets/${tenant}/${alias}`);
+  async getByAlias(alias: string): Promise<Secret> {
+    const encodedAlias = encodeURIComponent(alias);
+    return this.http.get<Secret>(`/v1/secrets/alias/${encodedAlias}`);
   }
 
   async decrypt(id: string): Promise<SecretWithData> {
@@ -66,9 +64,6 @@ export class SecretsClient {
 
   async list(filter?: SecretFilter): Promise<PaginatedResponse<Secret>> {
     const params = new URLSearchParams();
-    if (filter?.tenant) params.set('tenant', filter.tenant);
-    if (filter?.env) params.set('env', filter.env);
-    if (filter?.service) params.set('service', filter.service);
     if (filter?.type) params.set('type', filter.type);
     if (filter?.tags) params.set('tags', filter.tags.join(','));
     if (filter?.page) params.set('page', filter.page.toString());
@@ -93,14 +88,11 @@ export class SecretsClient {
   // File upload helper
   async uploadFile(
     alias: string,
-    tenant: string,
     filename: string,
     content: Buffer | string,
     options?: {
       contentType?: string;
       tags?: string[];
-      env?: string;
-      service?: string;
     }
   ): Promise<Secret> {
     const base64Content = Buffer.isBuffer(content)
@@ -109,9 +101,6 @@ export class SecretsClient {
 
     return this.create({
       alias,
-      tenant,
-      env: options?.env,
-      service: options?.service,
       type: 'opaque',
       data: {
         filename,

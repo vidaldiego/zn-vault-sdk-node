@@ -142,8 +142,6 @@ export interface Secret {
   id: string;
   alias: string;
   tenant: string;
-  env?: string;
-  service?: string;
   type: SecretType;
   version: number;
   tags?: string[];
@@ -160,9 +158,6 @@ export interface SecretWithData extends Secret {
 
 export interface CreateSecretRequest {
   alias: string;
-  tenant: string;
-  env?: string;
-  service?: string;
   type: SecretType;
   data: Record<string, unknown>;
   tags?: string[];
@@ -175,9 +170,6 @@ export interface UpdateSecretRequest {
 }
 
 export interface SecretFilter {
-  tenant?: string;
-  env?: string;
-  service?: string;
   type?: SecretType;
   tags?: string[];
   page?: number;
