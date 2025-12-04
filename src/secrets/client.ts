@@ -75,10 +75,10 @@ export class SecretsClient {
   }
 
   async getHistory(id: string): Promise<SecretVersion[]> {
-    const response = await this.http.get<{ versions: SecretVersion[] }>(
+    const response = await this.http.get<{ history: SecretVersion[] }>(
       `/v1/secrets/${id}/history`
     );
-    return response.versions;
+    return response.history;
   }
 
   async decryptVersion(id: string, version: number): Promise<SecretWithData> {

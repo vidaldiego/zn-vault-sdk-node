@@ -177,9 +177,15 @@ export interface SecretFilter {
 }
 
 export interface SecretVersion {
+  id: number;
+  tenant: string;
+  alias: string;
+  type: string;
   version: number;
-  createdAt: string;
-  createdBy: string;
+  tags?: string[];
+  createdAt?: string;
+  createdBy?: string;
+  checksum?: string;
 }
 
 // ============================================================================
