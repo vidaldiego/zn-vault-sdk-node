@@ -3,9 +3,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { ZnVaultClient } from '../src/index.js';
 
-const BASE_URL = process.env.ZN_VAULT_URL || 'https://localhost:8443';
-const ADMIN_USER = process.env.ZN_VAULT_USER || 'admin';
-const ADMIN_PASS = process.env.ZN_VAULT_PASS || 'admin123';
+const BASE_URL = process.env.ZNVAULT_BASE_URL || process.env.ZN_VAULT_URL || 'https://localhost:8443';
+// Note: Username must be in format "tenant/username" for non-superadmin users.
+// Superadmin can omit tenant prefix. Email can also be used as username.
+const ADMIN_USER = process.env.ZNVAULT_USERNAME || process.env.ZN_VAULT_USER || 'admin';
+const ADMIN_PASS = process.env.ZNVAULT_PASSWORD || process.env.ZN_VAULT_PASS || 'Admin123456#';
 
 describe('AuthClient', () => {
   let client: ZnVaultClient;

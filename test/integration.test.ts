@@ -336,7 +336,8 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
       createdUserIds.push(user.id);
 
       expect(user.id).toBeDefined();
-      expect(user.username).toBe(username);
+      // Server returns username with tenant prefix for tenant users
+      expect(user.username).toBe(`${TestConfig.DEFAULT_TENANT}/${username}`);
 
       console.log(`✓ Created user: ${user.username}`);
       console.log(`  ID: ${user.id}`);

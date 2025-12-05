@@ -17,10 +17,25 @@ export interface ZnVaultConfig {
 // Authentication
 // ============================================================================
 
+/**
+ * Login request parameters.
+ *
+ * The username must include the tenant prefix in the format `tenant/username`
+ * (e.g., "acme/admin"). This allows multiple tenants to have users with the
+ * same username. Email addresses can also be used as username.
+ *
+ * Alternatively, you can provide `tenant` and `username` separately, and the
+ * SDK will format them automatically.
+ */
 export interface LoginRequest {
+  /** Username in format "tenant/username" or email address */
   username: string;
+  /** User password */
   password: string;
+  /** Optional TOTP code if 2FA is enabled */
   totpCode?: string;
+  /** Optional tenant (if provided, will be prefixed to username as "tenant/username") */
+  tenant?: string;
 }
 
 export interface LoginResponse {

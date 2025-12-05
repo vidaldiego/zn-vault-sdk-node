@@ -17,9 +17,27 @@ import type {
 export class AuthClient {
   constructor(private http: HttpClient) {}
 
+  /**
+   * Login with username and password.
+   *
+   * The username must include the tenant prefix in the format `tenant/username`
+   * (e.g., "acme/admin"). This allows multiple tenants to have users with the
+   * same username. Email addresses can also be used as username.
+   *
+   * Alternatively, you can provide `tenant` and `username` separately in the
+   * request object, and the SDK will format them automatically.
+   *
+   * @param request - Login credentials
+   * @returns Login response with tokens
+   */
   async login(request: LoginRequest): Promise<LoginResponse> {
+    // If tenant is provided separately, format as "tenant/username"
+    const username = request.tenant
+      ? `${request.tenant}/${request.username}`
+      : request.username;
+
     const response = await this.http.post<LoginResponse>('/auth/login', {
-      username: request.username,
+      username,
       password: request.password,
       totp_code: request.totpCode,
     });
@@ -29,6 +47,31 @@ export class AuthClient {
     }
 
     return response;
+  }
+
+  /**
+   * Login with tenant and username as separate parameters.
+   *
+   * Convenience method that formats the username as "tenant/username".
+   *
+   * @param tenant - Tenant identifier (e.g., "acme")
+   * @param username - Username within the tenant (e.g., "admin")
+   * @param password - User password
+   * @param totpCode - Optional TOTP code if 2FA is enabled
+   * @returns Login response with tokens
+   */
+  async loginWithTenant(
+    tenant: string,
+    username: string,
+    password: string,
+    totpCode?: string
+  ): Promise<LoginResponse> {
+    return this.login({
+      tenant,
+      username,
+      password,
+      totpCode,
+    });
   }
 
   async refresh(refreshToken?: string): Promise<RefreshResponse> {
