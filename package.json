@@ -1,6 +1,6 @@
 {
   "name": "@zincapp/znvault-sdk",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Node.js/TypeScript SDK for ZN-Vault secrets management",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

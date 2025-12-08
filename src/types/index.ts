@@ -153,54 +153,220 @@ export interface UserFilter {
 
 export type SecretType = 'opaque' | 'credential' | 'setting';
 
+/**
+ * Semantic sub-types for secrets.
+ * These provide more granular classification beyond the base type.
+ */
+export type SecretSubType =
+  // Credential sub-types
+  | 'password'
+  | 'api_key'
+  // Opaque sub-types
+  | 'file'
+  | 'certificate'
+  | 'private_key'
+  | 'keypair'
+  | 'ssh_key'
+  | 'token'
+  | 'generic'
+  // Public key sub-types
+  | 'ed25519_public_key'
+  | 'rsa_public_key'
+  | 'ecdsa_public_key'
+  // Setting sub-types
+  | 'json'
+  | 'yaml'
+  | 'env'
+  | 'properties'
+  | 'toml';
+
+/**
+ * Secret metadata (without decrypted data).
+ */
 export interface Secret {
   id: string;
   alias: string;
   tenant: string;
   type: SecretType;
+  subType?: SecretSubType | null;
   version: number;
+  /** File metadata (queryable without decryption) */
+  fileName?: string | null;
+  fileSize?: number | null;
+  fileMime?: string | null;
+  fileChecksum?: string | null;
+  /** Natural expiration (for certs/tokens) */
+  expiresAt?: string | null;
+  /** User-defined expiration */
+  ttlUntil?: string | null;
   tags?: string[];
+  contentType?: string | null;
+  createdBy?: string | null;
   createdAt: string;
   updatedAt: string;
-  expiresAt?: string;
-  createdBy: string;
-  checksum?: string;
 }
 
+/**
+ * Secret with decrypted data.
+ */
 export interface SecretWithData extends Secret {
   data: Record<string, unknown>;
 }
 
+/**
+ * Request to create a new secret.
+ */
 export interface CreateSecretRequest {
   alias: string;
   type: SecretType;
+  /** Semantic sub-type (auto-inferred if not provided) */
+  subType?: SecretSubType;
   data: Record<string, unknown>;
-  tags?: string[];
+  /** Original filename for file-based secrets */
+  fileName?: string;
+  /** Natural expiration (ISO 8601) for certs/tokens */
+  expiresAt?: string;
+  /** User-defined expiration (ISO 8601) */
   ttlUntil?: string;
+  tags?: string[];
+  /** MIME type for settings/files */
+  contentType?: string;
 }
 
+/**
+ * Request to update an existing secret.
+ */
 export interface UpdateSecretRequest {
   data: Record<string, unknown>;
+  subType?: SecretSubType;
+  fileName?: string;
+  expiresAt?: string;
+  ttlUntil?: string;
   tags?: string[];
+  contentType?: string;
 }
 
+/**
+ * Filter options for listing secrets.
+ */
 export interface SecretFilter {
   type?: SecretType;
+  /** Filter by semantic sub-type */
+  subType?: SecretSubType;
+  /** Filter by file MIME type */
+  fileMime?: string;
+  /** Find secrets expiring before this date (ISO 8601) */
+  expiringBefore?: string;
   tags?: string[];
+  /** Filter by alias prefix (e.g., "web/*") */
+  aliasPrefix?: string;
   page?: number;
   pageSize?: number;
 }
 
+/**
+ * Secret version history entry.
+ */
 export interface SecretVersion {
   id: number;
   tenant: string;
   alias: string;
   type: string;
+  subType?: SecretSubType | null;
   version: number;
+  fileName?: string | null;
+  fileSize?: number | null;
+  fileMime?: string | null;
+  expiresAt?: string | null;
   tags?: string[];
   createdAt?: string;
   createdBy?: string;
-  checksum?: string;
+  supersededAt?: string;
+  supersededBy?: string;
+}
+
+/**
+ * Algorithm for keypair generation.
+ */
+export type KeypairAlgorithm = 'RSA' | 'Ed25519' | 'ECDSA';
+
+/**
+ * RSA key size options.
+ */
+export type RsaBits = 2048 | 4096;
+
+/**
+ * ECDSA curve options.
+ */
+export type EcdsaCurve = 'P-256' | 'P-384';
+
+/**
+ * Request to generate a keypair.
+ */
+export interface GenerateKeypairRequest {
+  /** Algorithm for keypair generation */
+  algorithm: KeypairAlgorithm;
+  /** Alias for the private key (e.g., "keys/prod/api-private") */
+  alias: string;
+  /** Tenant ID */
+  tenant: string;
+  /** RSA key size (only for RSA) */
+  rsaBits?: RsaBits;
+  /** ECDSA curve (only for ECDSA) */
+  ecdsaCurve?: EcdsaCurve;
+  /** Optional comment/description */
+  comment?: string;
+  /** Whether to auto-publish the public key */
+  publishPublicKey?: boolean;
+  /** Tags for both keys */
+  tags?: string[];
+}
+
+/**
+ * Public key information.
+ */
+export interface PublicKeyInfo {
+  id: string;
+  alias: string;
+  tenant: string;
+  subType: SecretSubType;
+  publicKey: string;
+  fingerprint: string;
+  algorithm: string;
+  bits?: number;
+}
+
+/**
+ * Generated keypair result.
+ */
+export interface GeneratedKeypair {
+  privateKey: {
+    id: string;
+    alias: string;
+  };
+  publicKey: PublicKeyInfo & {
+    isPublic: boolean;
+    publicKeyPem: string;
+    publicKeyOpenSSH: string;
+  };
+}
+
+/**
+ * Result of publishing a public key.
+ */
+export interface PublishResult {
+  message: string;
+  publicUrl: string;
+  fingerprint: string;
+  algorithm: string;
+}
+
+/**
+ * List of published public keys for a tenant.
+ */
+export interface PublicKeyList {
+  tenant: string;
+  keys: PublicKeyInfo[];
 }
 
 // ============================================================================
