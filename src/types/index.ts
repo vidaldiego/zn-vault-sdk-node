@@ -678,3 +678,172 @@ export interface ZnVaultErrorResponse {
   statusCode: number;
   details?: Record<string, unknown>;
 }
+
+// ============================================================================
+// Certificates
+// ============================================================================
+
+/**
+ * Certificate format types.
+ */
+export type CertificateType = 'P12' | 'PEM' | 'DER';
+
+/**
+ * Certificate purpose/usage.
+ */
+export type CertificatePurpose = 'TLS' | 'mTLS' | 'SIGNING' | 'ENCRYPTION' | 'AUTHENTICATION';
+
+/**
+ * Certificate lifecycle status.
+ */
+export type CertificateStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'SUSPENDED' | 'PENDING_DELETION';
+
+/**
+ * Certificate kind/category.
+ */
+export type CertificateKind = 'AEAT' | 'FNMT' | 'CAMERFIRMA' | 'CUSTOM' | string;
+
+/**
+ * Certificate metadata (without encrypted data).
+ */
+export interface Certificate {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  kind: string;
+  alias: string;
+  certificateType: CertificateType;
+  purpose: CertificatePurpose;
+  fingerprintSha256: string;
+  subjectCn: string;
+  issuerCn: string;
+  notBefore: string;
+  notAfter: string;
+  clientName: string;
+  organizationId?: string;
+  contactEmail?: string;
+  status: CertificateStatus;
+  version: number;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  lastAccessedAt?: string;
+  accessCount: number;
+  tags: string[];
+  daysUntilExpiry: number;
+  isExpired: boolean;
+}
+
+/**
+ * Decrypted certificate response.
+ */
+export interface DecryptedCertificate {
+  id: string;
+  certificateData: string;
+  certificateType: CertificateType;
+  fingerprintSha256: string;
+}
+
+/**
+ * Request to store a new certificate.
+ */
+export interface StoreCertificateRequest {
+  /** External customer identifier (e.g., NIF/CIF) */
+  clientId: string;
+  /** Certificate kind (AEAT, FNMT, CUSTOM, etc.) */
+  kind: CertificateKind;
+  /** Human-readable identifier */
+  alias: string;
+  /** Base64-encoded certificate data */
+  certificateData: string;
+  /** Certificate format */
+  certificateType: CertificateType;
+  /** Passphrase for P12 certificates */
+  passphrase?: string;
+  /** Certificate purpose */
+  purpose: CertificatePurpose;
+  /** Customer display name (defaults to certificate CN) */
+  clientName?: string;
+  /** Organization identifier */
+  organizationId?: string;
+  /** Contact for notifications */
+  contactEmail?: string;
+  /** Tags for organization */
+  tags?: string[];
+  /** Custom metadata */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Request to update certificate metadata.
+ */
+export interface UpdateCertificateRequest {
+  alias?: string;
+  clientName?: string;
+  contactEmail?: string;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Request to rotate a certificate.
+ */
+export interface RotateCertificateRequest {
+  /** Base64-encoded new certificate data */
+  certificateData: string;
+  /** Certificate format */
+  certificateType: CertificateType;
+  /** Passphrase for P12 certificates */
+  passphrase?: string;
+  /** Reason for rotation */
+  reason?: string;
+}
+
+/**
+ * Filter options for listing certificates.
+ */
+export interface CertificateFilter {
+  clientId?: string;
+  kind?: string;
+  status?: CertificateStatus;
+  expiringBefore?: string;
+  tags?: string[];
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Certificate statistics.
+ */
+export interface CertificateStats {
+  total: number;
+  byStatus: Record<string, number>;
+  byKind: Record<string, number>;
+  expiringIn30Days: number;
+  expiringIn7Days: number;
+}
+
+/**
+ * Certificate access log entry.
+ */
+export interface CertificateAccessLogEntry {
+  id: number;
+  certificateId: string;
+  tenantId: string;
+  userId?: string;
+  apiKeyId?: string;
+  purpose: string;
+  operation: string;
+  ipAddress?: string;
+  userAgent?: string;
+  accessedAt: string;
+  success: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Certificate access log response.
+ */
+export interface CertificateAccessLog {
+  entries: CertificateAccessLogEntry[];
+}

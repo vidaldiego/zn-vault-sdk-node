@@ -4,6 +4,7 @@ import { HttpClient, type HttpClientConfig } from './http/client.js';
 import { AuthClient } from './auth/client.js';
 import { SecretsClient } from './secrets/client.js';
 import { KmsClient } from './kms/client.js';
+import { CertificatesClient } from './certificates/client.js';
 import { UsersClient } from './admin/users.js';
 import { RolesClient } from './admin/roles.js';
 import { TenantsClient } from './admin/tenants.js';
@@ -29,6 +30,7 @@ export class ZnVaultClient {
   private _auth: AuthClient;
   private _secrets: SecretsClient;
   private _kms: KmsClient;
+  private _certificates: CertificatesClient;
   private _users: UsersClient;
   private _roles: RolesClient;
   private _tenants: TenantsClient;
@@ -51,6 +53,7 @@ export class ZnVaultClient {
     this._auth = new AuthClient(this.httpClient);
     this._secrets = new SecretsClient(this.httpClient);
     this._kms = new KmsClient(this.httpClient);
+    this._certificates = new CertificatesClient(this.httpClient);
     this._users = new UsersClient(this.httpClient);
     this._roles = new RolesClient(this.httpClient);
     this._tenants = new TenantsClient(this.httpClient);
@@ -82,6 +85,11 @@ export class ZnVaultClient {
   /** KMS (Key Management Service) operations */
   get kms(): KmsClient {
     return this._kms;
+  }
+
+  /** Certificate lifecycle management operations */
+  get certificates(): CertificatesClient {
+    return this._certificates;
   }
 
   /** User management (admin) */
@@ -207,6 +215,7 @@ export * from './types/index.js';
 export { AuthClient } from './auth/index.js';
 export { SecretsClient } from './secrets/index.js';
 export { KmsClient } from './kms/index.js';
+export { CertificatesClient } from './certificates/index.js';
 export { UsersClient, RolesClient, TenantsClient, PoliciesClient } from './admin/index.js';
 export { AuditClient, type AuditVerifyResult } from './audit/index.js';
 export { HealthClient, type HealthStatus, type ReadinessStatus } from './health/index.js';
