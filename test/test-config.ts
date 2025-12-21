@@ -4,6 +4,11 @@ import { ZnVaultClient } from '../src/index.js';
 
 /**
  * Test configuration for integration tests.
+ *
+ * Environment variables:
+ * - ZNVAULT_BASE_URL: Server URL (e.g., "https://vault.zincapp.com")
+ * - ZNVAULT_USERNAME: Superadmin username (default: "admin")
+ * - ZNVAULT_PASSWORD: Superadmin password (default: "Admin123456#")
  */
 export const TestConfig = {
   // Test server
@@ -14,16 +19,16 @@ export const TestConfig = {
   // Superadmin can omit tenant prefix. Email can also be used as username.
   Users: {
     // Superadmin - full access (no tenant prefix required)
-    SUPERADMIN_USERNAME: 'admin',
-    SUPERADMIN_PASSWORD: 'Admin123456#',
+    SUPERADMIN_USERNAME: process.env.ZNVAULT_USERNAME ?? 'admin',
+    SUPERADMIN_PASSWORD: process.env.ZNVAULT_PASSWORD ?? 'Admin123456#',
 
     // Tenant admin - manages tenant resources (requires tenant/username format)
     TENANT_ADMIN_USERNAME: 'zincapp/zincadmin',
-    TENANT_ADMIN_PASSWORD: 'Admin123456#',
+    TENANT_ADMIN_PASSWORD: process.env.ZNVAULT_PASSWORD ?? 'Admin123456#',
 
     // Regular user - limited access (requires tenant/username format)
     REGULAR_USER_USERNAME: 'zincapp/zincuser',
-    REGULAR_USER_PASSWORD: 'Admin123456#',
+    REGULAR_USER_PASSWORD: process.env.ZNVAULT_PASSWORD ?? 'Admin123456#',
   },
 
   // Default tenant for tests

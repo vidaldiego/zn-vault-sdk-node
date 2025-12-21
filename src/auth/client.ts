@@ -141,16 +141,17 @@ export class AuthClient {
     await this.http.delete(`/auth/api-keys/${id}`);
   }
 
-  async rotateApiKey(id: string): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`);
+  async rotateApiKey(id: string, name?: string): Promise<CreateApiKeyResponse> {
+    return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`, { name });
   }
 
-  async getCurrentApiKey(): Promise<ApiKey> {
-    return this.http.get<ApiKey>('/auth/api-keys/self');
+  async getCurrentApiKey(): Promise<ApiKey & { expiresInDays: number; isExpiringSoon: boolean }> {
+    const response = await this.http.get<{ apiKey: ApiKey; expiresInDays: number; isExpiringSoon: boolean }>('/auth/api-keys/self');
+    return { ...response.apiKey, expiresInDays: response.expiresInDays, isExpiringSoon: response.isExpiringSoon };
   }
 
-  async rotateCurrentApiKey(): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate');
+  async rotateCurrentApiKey(name?: string): Promise<CreateApiKeyResponse> {
+    return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate', { name });
   }
 
   // 2FA
