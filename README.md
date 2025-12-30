@@ -139,6 +139,49 @@ const secrets = await client.secrets.list({
 await client.secrets.delete(secret.id);
 ```
 
+### Pattern Matching & Search
+
+Use wildcard patterns with `*` to query secrets by path:
+
+```typescript
+// Find all secrets under a path
+const webSecrets = await client.secrets.list({
+  aliasPrefix: 'web/*'
+});
+
+// Find secrets containing "/env/" anywhere in the path
+const envSecrets = await client.secrets.list({
+  aliasPrefix: '*/env/*'
+});
+
+// SQL-like pattern matching
+const dbSecrets = await client.secrets.list({
+  aliasPrefix: '*/env/secret_*'
+});
+
+// Match multiple path segments
+const prodDb = await client.secrets.list({
+  aliasPrefix: 'db-*/prod*'
+});
+// Matches: db-mysql/production, db-postgres/prod-us, etc.
+
+// Combine pattern with type filter
+const credentials = await client.secrets.list({
+  aliasPrefix: '*/production/*',
+  type: 'credential'
+});
+```
+
+**Pattern Examples:**
+
+| Pattern | Matches |
+|---------|---------|
+| `web/*` | `web/api`, `web/frontend/config` |
+| `*/env/*` | `app/env/vars`, `service/env/config` |
+| `db-*/prod*` | `db-mysql/production`, `db-postgres/prod-us` |
+| `*secret*` | `my-secret`, `api/secret/key`, `secret-config` |
+| `*/production/db-*` | `app/production/db-main`, `api/production/db-replica` |
+
 ### File Upload/Download
 
 ```typescript
