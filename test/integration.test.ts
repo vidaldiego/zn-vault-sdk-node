@@ -65,14 +65,14 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
       console.log(`✓ Logged in as superadmin, token expires in ${response.expiresIn}s`);
     });
 
-    it('should login with valid regular user credentials', async () => {
+    it('should login with valid reader user credentials', async () => {
       const response = await client.login(
-        TestConfig.Users.REGULAR_USER_USERNAME,
-        TestConfig.Users.REGULAR_USER_PASSWORD
+        TestConfig.Users.READER_USERNAME,
+        TestConfig.Users.READER_PASSWORD
       );
 
       expect(response.accessToken).toBeDefined();
-      console.log('✓ Logged in as regular user');
+      console.log('✓ Logged in as reader user');
     });
 
     it('should fail login with invalid credentials', async () => {
@@ -106,8 +106,9 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let createdSecretIds: string[] = [];
 
     beforeAll(async () => {
-      // Use regular user for secrets - they have secret:read:value permission
-      client = await TestConfig.createRegularUserClient();
+      // Use tenant admin - has full tenant permissions including secret:read:value
+      // Tenant has allow_admin_secret_access=true so admin can decrypt secrets
+      client = await TestConfig.createTenantAdminClient();
     });
 
     afterEach(async () => {
@@ -266,7 +267,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
       }
 
       // List secrets
-      const secrets = await client.secrets.list({ tenant: TestConfig.DEFAULT_TENANT });
+      const secrets = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
 
       expect(secrets.length).toBeGreaterThanOrEqual(3);
       console.log(`✓ Listed ${secrets.length} secrets`);

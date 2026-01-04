@@ -59,27 +59,110 @@ export interface MeResponse {
   authMethod?: string;
 }
 
-export interface CreateApiKeyRequest {
-  name: string;
-  expiresIn?: string;
-  permissions?: string[];
+/**
+ * Time range condition for API key access.
+ */
+export interface ApiKeyTimeRangeCondition {
+  /** Start time in HH:MM format */
+  start: string;
+  /** End time in HH:MM format */
+  end: string;
+  /** IANA timezone (default: UTC) */
+  timezone?: string;
 }
 
+/**
+ * Resource restrictions for API key access.
+ */
+export interface ApiKeyResourceConditions {
+  /** Specific secret IDs */
+  secrets?: string[];
+  /** Specific certificate IDs */
+  certificates?: string[];
+  /** Specific KMS key IDs */
+  kms_keys?: string[];
+}
+
+/**
+ * Inline ABAC conditions for API keys.
+ * These provide fine-grained access control without creating separate policies.
+ */
+export interface ApiKeyConditions {
+  /** IP addresses or CIDR ranges allowed to use this key */
+  ip?: string[];
+  /** Time-of-day restriction */
+  timeRange?: ApiKeyTimeRangeCondition;
+  /** Allowed HTTP methods (GET, POST, PUT, PATCH, DELETE) */
+  methods?: string[];
+  /** Specific resource IDs by type */
+  resources?: ApiKeyResourceConditions;
+  /** Glob patterns for secret/certificate aliases (e.g., "api/prod/*") */
+  aliases?: string[];
+  /** Required resource tags (key-value pairs) */
+  resourceTags?: Record<string, string>;
+}
+
+/**
+ * Request to create an API key.
+ *
+ * API keys provide programmatic access to the vault. They are independent
+ * (not bound to any user) and managed at the tenant level.
+ */
+export interface CreateApiKeyRequest {
+  /** Descriptive name for the API key */
+  name: string;
+  /** Direct RBAC permissions. Supports wildcards: ["secret:*", "certificate:read:*"] */
+  permissions: string[];
+  /** Optional description of the API key purpose */
+  description?: string;
+  /** Days until expiration (1-3650, default: 90) */
+  expiresInDays?: number;
+  /** IP addresses or CIDR ranges allowed (legacy, prefer conditions.ip) */
+  ipAllowlist?: string[];
+  /** Inline ABAC conditions for fine-grained access control */
+  conditions?: ApiKeyConditions;
+  /** Target tenant ID (required for superadmin, optional for tenant users) */
+  tenantId?: string;
+}
+
+/**
+ * API key metadata.
+ */
 export interface ApiKey {
   id: string;
   name: string;
+  description?: string;
   prefix?: string;
-  userId?: string;
+  tenantId?: string;
+  createdBy?: string;
   createdAt?: string;
   expiresAt?: string;
   lastUsed?: string;
-  scope?: string;
+  permissions?: string[];
+  ipAllowlist?: string[];
+  conditions?: ApiKeyConditions;
+  enabled?: boolean;
+  rotationCount?: number;
+  lastRotation?: string;
 }
 
+/**
+ * Response from creating an API key.
+ */
 export interface CreateApiKeyResponse {
+  /** The full API key - shown only once! Save it immediately. */
   key: string;
+  /** API key metadata */
   apiKey: ApiKey;
   message?: string;
+}
+
+/**
+ * Request to rotate an API key.
+ */
+export interface RotateApiKeyRequest {
+  /** New expiration in days (optional, keeps current if not specified) */
+  expiresInDays?: number;
 }
 
 export interface TwoFactorSetupResponse {
@@ -231,6 +314,8 @@ export interface CreateSecretRequest {
   tags?: string[];
   /** MIME type for settings/files */
   contentType?: string;
+  /** Tenant ID (required for superadmin, optional for tenant-scoped users) */
+  tenant?: string;
 }
 
 /**
@@ -262,6 +347,8 @@ export interface SecretFilter {
   aliasPrefix?: string;
   page?: number;
   pageSize?: number;
+  /** Tenant ID (required for superadmin, optional for tenant-scoped users) */
+  tenantId?: string;
 }
 
 /**

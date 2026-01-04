@@ -125,33 +125,95 @@ export class AuthClient {
   }
 
   // API Keys
+
+  /**
+   * Create an API key for programmatic access.
+   *
+   * API keys are independent (not bound to any user) and managed at the tenant level.
+   * The key value is only shown once - save it immediately!
+   *
+   * @param request - API key creation parameters
+   * @returns The created API key with the full key value
+   */
   async createApiKey(request: CreateApiKeyRequest): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>('/auth/api-keys', {
+    const path = request.tenantId
+      ? `/auth/api-keys?tenantId=${encodeURIComponent(request.tenantId)}`
+      : '/auth/api-keys';
+
+    return this.http.post<CreateApiKeyResponse>(path, {
       name: request.name,
-      expires_in: request.expiresIn,
       permissions: request.permissions,
+      description: request.description,
+      expiresInDays: request.expiresInDays,
+      ipAllowlist: request.ipAllowlist,
+      conditions: request.conditions,
     });
   }
 
+  /**
+   * List all API keys for the current tenant.
+   *
+   * @returns Object containing all keys and keys expiring soon
+   */
   async listApiKeys(): Promise<{ keys: ApiKey[]; expiringSoon: ApiKey[] }> {
     return this.http.get('/auth/api-keys');
   }
 
+  /**
+   * Get a specific API key by ID.
+   *
+   * @param id - The API key ID
+   * @returns The API key metadata
+   */
+  async getApiKey(id: string): Promise<ApiKey> {
+    const response = await this.http.get<{ apiKey: ApiKey }>(`/auth/api-keys/${id}`);
+    return response.apiKey;
+  }
+
+  /**
+   * Delete an API key.
+   *
+   * @param id - The API key ID to delete
+   */
   async deleteApiKey(id: string): Promise<void> {
     await this.http.delete(`/auth/api-keys/${id}`);
   }
 
-  async rotateApiKey(id: string, name?: string): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`, { name });
+  /**
+   * Rotate an API key, generating a new key value.
+   *
+   * @param id - The API key ID to rotate
+   * @param expiresInDays - Optional new expiration period
+   * @returns The rotated API key with new key value
+   */
+  async rotateApiKey(id: string, expiresInDays?: number): Promise<CreateApiKeyResponse> {
+    return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`, {
+      expiresInDays,
+    });
   }
 
+  /**
+   * Get information about the currently authenticated API key.
+   * Only works when authenticated via API key.
+   *
+   * @returns The current API key metadata with expiration info
+   */
   async getCurrentApiKey(): Promise<ApiKey & { expiresInDays: number; isExpiringSoon: boolean }> {
     const response = await this.http.get<{ apiKey: ApiKey; expiresInDays: number; isExpiringSoon: boolean }>('/auth/api-keys/self');
     return { ...response.apiKey, expiresInDays: response.expiresInDays, isExpiringSoon: response.isExpiringSoon };
   }
 
-  async rotateCurrentApiKey(name?: string): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate', { name });
+  /**
+   * Rotate the currently authenticated API key.
+   * Only works when authenticated via API key.
+   *
+   * @param expiresInDays - Optional new expiration period
+   * @returns The rotated API key with new key value
+   */
+  async rotateCurrentApiKey(expiresInDays?: number): Promise<CreateApiKeyResponse> {
+    return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate', {
+      expiresInDays,
+    });
   }
 
   // 2FA

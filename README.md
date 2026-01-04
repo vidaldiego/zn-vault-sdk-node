@@ -415,6 +415,54 @@ const secret: Secret = await client.secrets.get(id);
 const secrets: PaginatedResponse<Secret> = await client.secrets.list();
 ```
 
+## Testing
+
+### Running Tests
+
+The SDK uses an ephemeral Docker environment for integration testing. Tests run against a fresh vault instance that is automatically created and destroyed.
+
+```bash
+# From the SDK directory, use the SDK test runner:
+../zn-vault/scripts/sdk-test-run.sh npm test
+
+# Or if zn-vault is in a sibling directory:
+../scripts/sdk-test-run.sh npm test
+```
+
+The test runner will:
+1. Start a fresh vault container on port 9443
+2. Initialize test data (tenant, users, secrets, API key)
+3. Export credentials as environment variables
+4. Run your tests
+5. Clean up the container (regardless of test outcome)
+
+### Environment Variables
+
+When running tests, the following environment variables are set automatically:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ZNVAULT_BASE_URL` | Vault server URL | `https://localhost:9443` |
+| `ZNVAULT_USERNAME` | Superadmin username | `admin` |
+| `ZNVAULT_PASSWORD` | Superadmin password | `SdkSuperAdmin123456#` |
+| `ZNVAULT_TENANT` | Test tenant ID | `sdk-test` |
+| `ZNVAULT_API_KEY` | Pre-created API key | `znv_...` |
+
+### Test Configuration
+
+The test configuration is in `test/test-config.ts`. It automatically detects whether integration tests should run based on the presence of `ZNVAULT_BASE_URL`.
+
+### Manual Testing
+
+To run tests against an existing vault instance:
+
+```bash
+export ZNVAULT_BASE_URL=https://vault.example.com:8443
+export ZNVAULT_USERNAME=admin
+export ZNVAULT_PASSWORD=your-password
+npm test
+```
+
 ## License
 
 Apache-2.0

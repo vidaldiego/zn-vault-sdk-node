@@ -8,6 +8,7 @@ const BASE_URL = process.env.ZNVAULT_BASE_URL || process.env.ZN_VAULT_URL || 'ht
 // Superadmin can omit tenant prefix. Email can also be used as username.
 const ADMIN_USER = process.env.ZNVAULT_USERNAME || process.env.ZN_VAULT_USER || 'admin';
 const ADMIN_PASS = process.env.ZNVAULT_PASSWORD || process.env.ZN_VAULT_PASS || 'Admin123456#';
+const TENANT_ID = process.env.ZNVAULT_TENANT || 'sdk-test';
 
 describe('AuthClient', () => {
   let client: ZnVaultClient;
@@ -25,13 +26,38 @@ describe('AuthClient', () => {
 
       const response = await client.auth.createApiKey({
         name: `test-key-${Date.now()}`,
-        expiresIn: '1d',
+        permissions: ['secret:read:metadata', 'secret:read:value'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
       });
 
       expect(response.key).toBeDefined();
       expect(response.key).toMatch(/^znv_/);
       expect(response.apiKey).toBeDefined();
       expect(response.apiKey.id).toBeDefined();
+      expect(response.apiKey.permissions).toContain('secret:read:metadata');
+
+      // Cleanup
+      await client.auth.deleteApiKey(response.apiKey.id);
+    });
+
+    it('should create an API key with conditions', async () => {
+      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
+
+      const response = await client.auth.createApiKey({
+        name: `test-key-conditions-${Date.now()}`,
+        permissions: ['secret:read:metadata'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
+        conditions: {
+          ip: ['10.0.0.0/8'],
+          methods: ['GET'],
+        },
+      });
+
+      expect(response.key).toBeDefined();
+      expect(response.apiKey.conditions).toBeDefined();
+      expect(response.apiKey.conditions?.ip).toContain('10.0.0.0/8');
 
       // Cleanup
       await client.auth.deleteApiKey(response.apiKey.id);
@@ -52,7 +78,9 @@ describe('AuthClient', () => {
       // Create a key to rotate
       const original = await client.auth.createApiKey({
         name: `rotate-test-${Date.now()}`,
-        expiresIn: '1d',
+        permissions: ['secret:read:metadata'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
       });
 
       // Rotate the key
@@ -72,7 +100,9 @@ describe('AuthClient', () => {
 
       const keyResponse = await client.auth.createApiKey({
         name: `self-test-${Date.now()}`,
-        expiresIn: '1d',
+        permissions: ['secret:read:metadata'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
       });
 
       // Create a new client with the API key
@@ -82,7 +112,7 @@ describe('AuthClient', () => {
         .rejectUnauthorized(false)
         .build();
 
-      // Get current API key info
+      // Get current API key info (self endpoints don't require special permissions)
       const currentKey = await apiKeyClient.auth.getCurrentApiKey();
 
       expect(currentKey).toBeDefined();
@@ -99,7 +129,9 @@ describe('AuthClient', () => {
 
       const originalKey = await client.auth.createApiKey({
         name: `self-rotate-test-${Date.now()}`,
-        expiresIn: '1d',
+        permissions: ['secret:read:metadata'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
       });
 
       // Create a new client with the API key
@@ -109,7 +141,7 @@ describe('AuthClient', () => {
         .rejectUnauthorized(false)
         .build();
 
-      // Self-rotate the key
+      // Self-rotate the key (self endpoints don't require special permissions)
       const rotatedKey = await apiKeyClient.auth.rotateCurrentApiKey();
 
       expect(rotatedKey.key).toBeDefined();
@@ -126,7 +158,9 @@ describe('AuthClient', () => {
       // Create a key to delete
       const keyResponse = await client.auth.createApiKey({
         name: `delete-test-${Date.now()}`,
-        expiresIn: '1d',
+        permissions: ['secret:read:metadata'],
+        expiresInDays: 1,
+        tenantId: TENANT_ID,
       });
 
       // Delete it
