@@ -1,7 +1,7 @@
 // Path: zn-vault-sdk-node/src/http/client.ts
 
 import https from 'node:https';
-import type { ZnVaultErrorResponse } from '../types/index.js';
+import type { ZnVaultErrorResponse, ManagedKeyBindResponse, ManagedKeyConfig } from '../types/index.js';
 
 export interface HttpClientConfig {
   baseUrl: string;
@@ -9,9 +9,37 @@ export interface HttpClientConfig {
   timeout?: number;
   retries?: number;
   rejectUnauthorized?: boolean;
+  /** Configuration for managed API key auto-rotation */
+  managedKey?: ManagedKeyConfig;
 }
 
 export type TokenRefreshCallback = () => Promise<string>;
+
+/**
+ * Internal state for managed key rotation
+ */
+interface ManagedKeyState {
+  /** The managed key name */
+  name: string;
+  /** Tenant ID for cross-tenant access */
+  tenantId?: string;
+  /** Current key value */
+  currentKey: string;
+  /** When the next rotation will occur */
+  nextRotationAt?: Date;
+  /** When the grace period expires */
+  graceExpiresAt?: Date;
+  /** How early to refresh before expiry (ms) */
+  refreshBeforeExpiryMs: number;
+  /** Scheduled refresh timer */
+  refreshTimer?: ReturnType<typeof setTimeout>;
+  /** Whether a refresh is in progress */
+  isRefreshing: boolean;
+  /** Callback when key rotates */
+  onKeyRotated?: (newKey: string, oldKey: string) => void;
+  /** Callback on rotation error */
+  onRotationError?: (error: Error) => void;
+}
 
 export class ZnVaultError extends Error {
   constructor(
@@ -78,6 +106,8 @@ export class HttpClient {
   private retryDelay: number;
   private rejectUnauthorized: boolean;
   private tokenRefreshCallback?: TokenRefreshCallback;
+  private managedKeyState?: ManagedKeyState;
+  private managedKeyConfig?: ManagedKeyConfig;
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -86,6 +116,7 @@ export class HttpClient {
     this.retryAttempts = config.retries ?? 3;
     this.retryDelay = 1000;
     this.rejectUnauthorized = config.rejectUnauthorized ?? true;
+    this.managedKeyConfig = config.managedKey;
   }
 
   setTokens(accessToken: string, refreshToken?: string): void {
@@ -104,6 +135,236 @@ export class HttpClient {
 
   onTokenRefresh(callback: TokenRefreshCallback): void {
     this.tokenRefreshCallback = callback;
+  }
+
+  // =========================================================================
+  // Managed API Key Auto-Rotation
+  // =========================================================================
+
+  /**
+   * Initialize managed key mode with an initial key value.
+   *
+   * Call this when you have a managed API key and want the SDK to
+   * automatically rotate it before expiration.
+   *
+   * @param initialKey - The initial API key value (znv_xxx)
+   * @param config - Optional override config (uses constructor config if not provided)
+   */
+  async initManagedKey(initialKey: string, config?: ManagedKeyConfig): Promise<ManagedKeyBindResponse> {
+    const effectiveConfig = config ?? this.managedKeyConfig;
+    if (!effectiveConfig) {
+      throw new Error('Managed key config required - provide via constructor or initManagedKey');
+    }
+
+    // Set the initial key so we can make the bind request
+    this.apiKey = initialKey;
+
+    // Bind to get current key and rotation metadata
+    const bindResponse = await this.bindManagedKeyInternal(
+      effectiveConfig.name,
+      effectiveConfig.tenantId
+    );
+
+    // Initialize state
+    this.managedKeyState = {
+      name: effectiveConfig.name,
+      tenantId: effectiveConfig.tenantId,
+      currentKey: bindResponse.key,
+      nextRotationAt: bindResponse.nextRotationAt ? new Date(bindResponse.nextRotationAt) : undefined,
+      graceExpiresAt: bindResponse.graceExpiresAt ? new Date(bindResponse.graceExpiresAt) : undefined,
+      refreshBeforeExpiryMs: effectiveConfig.refreshBeforeExpiryMs ?? 30000,
+      isRefreshing: false,
+      onKeyRotated: effectiveConfig.onKeyRotated,
+      onRotationError: effectiveConfig.onRotationError,
+    };
+
+    // Update to the bound key (may be same or new after rotation)
+    this.apiKey = bindResponse.key;
+
+    // Schedule next refresh
+    this.scheduleManagedKeyRefresh();
+
+    return bindResponse;
+  }
+
+  /**
+   * Get the current API key value.
+   * Useful for debugging or passing to other systems.
+   */
+  getCurrentApiKey(): string | undefined {
+    return this.apiKey;
+  }
+
+  /**
+   * Check if using managed key mode.
+   */
+  isManagedKeyMode(): boolean {
+    return !!this.managedKeyState;
+  }
+
+  /**
+   * Get managed key rotation info.
+   */
+  getManagedKeyInfo(): {
+    name: string;
+    nextRotationAt?: Date;
+    graceExpiresAt?: Date;
+    isRefreshing: boolean;
+  } | undefined {
+    if (!this.managedKeyState) return undefined;
+    return {
+      name: this.managedKeyState.name,
+      nextRotationAt: this.managedKeyState.nextRotationAt,
+      graceExpiresAt: this.managedKeyState.graceExpiresAt,
+      isRefreshing: this.managedKeyState.isRefreshing,
+    };
+  }
+
+  /**
+   * Force refresh the managed key now.
+   * Useful if you detect a key issue or want to proactively rotate.
+   */
+  async refreshManagedKey(): Promise<ManagedKeyBindResponse> {
+    if (!this.managedKeyState) {
+      throw new Error('Not in managed key mode - call initManagedKey first');
+    }
+
+    return this.doManagedKeyRefresh();
+  }
+
+  /**
+   * Stop managed key auto-rotation and clear state.
+   */
+  stopManagedKeyRotation(): void {
+    if (this.managedKeyState?.refreshTimer) {
+      clearTimeout(this.managedKeyState.refreshTimer);
+    }
+    this.managedKeyState = undefined;
+  }
+
+  /**
+   * Internal: bind to managed key endpoint
+   */
+  private async bindManagedKeyInternal(name: string, tenantId?: string): Promise<ManagedKeyBindResponse> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.request<ManagedKeyBindResponse>({
+      method: 'POST',
+      path: `/auth/api-keys/managed/${encodeURIComponent(name)}/bind${query ? `?${query}` : ''}`,
+      body: {},
+    });
+  }
+
+  /**
+   * Internal: schedule the next managed key refresh
+   */
+  private scheduleManagedKeyRefresh(): void {
+    if (!this.managedKeyState) return;
+
+    // Clear any existing timer
+    if (this.managedKeyState.refreshTimer) {
+      clearTimeout(this.managedKeyState.refreshTimer);
+      this.managedKeyState.refreshTimer = undefined;
+    }
+
+    // Determine when to refresh
+    const now = Date.now();
+    let refreshAt: number | undefined;
+
+    // For scheduled rotation, refresh before nextRotationAt
+    if (this.managedKeyState.nextRotationAt) {
+      refreshAt = this.managedKeyState.nextRotationAt.getTime() - this.managedKeyState.refreshBeforeExpiryMs;
+    }
+    // Fallback: refresh before grace period expires
+    else if (this.managedKeyState.graceExpiresAt) {
+      refreshAt = this.managedKeyState.graceExpiresAt.getTime() - this.managedKeyState.refreshBeforeExpiryMs;
+    }
+
+    if (!refreshAt || refreshAt <= now) {
+      // Already past refresh time - refresh immediately on next tick
+      // (but not synchronously to avoid infinite loops)
+      this.managedKeyState.refreshTimer = setTimeout(() => {
+        this.doManagedKeyRefresh().catch((err) => {
+          this.managedKeyState?.onRotationError?.(err);
+        });
+      }, 100);
+      return;
+    }
+
+    // Schedule refresh
+    const delay = refreshAt - now;
+    this.managedKeyState.refreshTimer = setTimeout(() => {
+      this.doManagedKeyRefresh().catch((err) => {
+        this.managedKeyState?.onRotationError?.(err);
+      });
+    }, delay);
+  }
+
+  /**
+   * Internal: perform managed key refresh
+   */
+  private async doManagedKeyRefresh(): Promise<ManagedKeyBindResponse> {
+    if (!this.managedKeyState) {
+      throw new Error('Not in managed key mode');
+    }
+
+    // Prevent concurrent refreshes
+    if (this.managedKeyState.isRefreshing) {
+      // Wait a bit and return current state
+      await this.sleep(100);
+      return {
+        id: '',
+        key: this.managedKeyState.currentKey,
+        prefix: '',
+        name: this.managedKeyState.name,
+        expiresAt: '',
+        gracePeriod: '',
+        rotationMode: 'scheduled',
+        permissions: [],
+        nextRotationAt: this.managedKeyState.nextRotationAt?.toISOString(),
+        graceExpiresAt: this.managedKeyState.graceExpiresAt?.toISOString(),
+      };
+    }
+
+    this.managedKeyState.isRefreshing = true;
+    const oldKey = this.managedKeyState.currentKey;
+
+    try {
+      // Bind to get new key
+      const bindResponse = await this.bindManagedKeyInternal(
+        this.managedKeyState.name,
+        this.managedKeyState.tenantId
+      );
+
+      // Update state
+      const newKey = bindResponse.key;
+      this.managedKeyState.currentKey = newKey;
+      this.managedKeyState.nextRotationAt = bindResponse.nextRotationAt
+        ? new Date(bindResponse.nextRotationAt)
+        : undefined;
+      this.managedKeyState.graceExpiresAt = bindResponse.graceExpiresAt
+        ? new Date(bindResponse.graceExpiresAt)
+        : undefined;
+
+      // Update the API key used for requests
+      this.apiKey = newKey;
+
+      // Notify callback if key changed
+      if (newKey !== oldKey) {
+        this.managedKeyState.onKeyRotated?.(newKey, oldKey);
+      }
+
+      // Schedule next refresh
+      this.scheduleManagedKeyRefresh();
+
+      return bindResponse;
+    } finally {
+      if (this.managedKeyState) {
+        this.managedKeyState.isRefreshing = false;
+      }
+    }
   }
 
   async request<T>(options: RequestOptions): Promise<T> {

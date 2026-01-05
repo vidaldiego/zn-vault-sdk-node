@@ -93,6 +93,98 @@ const client = ZnVaultClient.builder()
 const secrets = await client.secrets.list({ tenant: 'acme' });
 ```
 
+### Managed API Keys (Auto-Rotation)
+
+Managed API keys automatically rotate based on a configured schedule or trigger. The SDK handles renewal transparently.
+
+**Rotation Modes:**
+
+| Mode | Description |
+|------|-------------|
+| `scheduled` | Rotates at fixed intervals (e.g., every 24 hours) |
+| `on-use` | Rotates after each use (TTL resets on each bind) |
+| `on-bind` | Rotates each time bind is called |
+
+**Creating a Managed Key (Admin):**
+
+```typescript
+// Create a managed API key with scheduled rotation
+const managedKey = await client.auth.createManagedApiKey({
+  name: 'my-service-key',
+  permissions: ['secret:read:metadata', 'secret:read:value'],
+  rotationMode: 'scheduled',
+  rotationInterval: '24h',  // Rotate every 24 hours
+  gracePeriod: '5m',        // Old key valid for 5 minutes after rotation
+  tenantId: 'acme'          // Required for superadmin
+});
+```
+
+**Using a Managed Key (Agent/Service):**
+
+```typescript
+// Initialize client with managed key configuration
+const client = ZnVaultClient.builder()
+  .baseUrl('https://vault.example.com:8443')
+  .managedKey({
+    name: 'my-service-key',
+    refreshBeforeExpiryMs: 30000, // Refresh 30s before rotation
+    onKeyRotated: (newKey, oldKey) => {
+      console.log('Key rotated successfully');
+    },
+    onRotationError: (error) => {
+      console.error('Rotation failed:', error);
+    }
+  })
+  .build();
+
+// Initialize with current key value (from secure storage or env var)
+const bindResponse = await client.initManagedKey(process.env.VAULT_API_KEY!);
+console.log('Next rotation at:', bindResponse.nextRotationAt);
+
+// SDK automatically refreshes before expiration
+// All requests use the current valid key
+const secrets = await client.secrets.list({ tenant: 'acme' });
+
+// Check managed key status
+if (client.isManagedKeyMode()) {
+  const info = client.getManagedKeyInfo();
+  console.log('Next rotation:', info?.nextRotationAt);
+}
+
+// Force immediate refresh if needed
+await client.refreshManagedKey();
+
+// Stop auto-rotation when shutting down
+client.stopManagedKeyRotation();
+```
+
+**Managed Key CRUD Operations:**
+
+```typescript
+// List managed keys
+const { keys } = await client.auth.listManagedApiKeys('acme');
+
+// Get managed key details
+const key = await client.auth.getManagedApiKey('my-service-key');
+
+// Bind to get current key value (for agents)
+const binding = await client.auth.bindManagedApiKey('my-service-key');
+console.log('Current key:', binding.key);
+console.log('Expires at:', binding.expiresAt);
+
+// Force rotate immediately
+const rotated = await client.auth.rotateManagedApiKey('my-service-key');
+
+// Update configuration
+await client.auth.updateManagedApiKeyConfig('my-service-key', {
+  rotationInterval: '12h',
+  gracePeriod: '10m'
+});
+
+// Delete managed key
+await client.auth.deleteManagedApiKey('my-service-key');
+```
+
 ## Secrets Management
 
 ```typescript

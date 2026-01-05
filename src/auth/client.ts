@@ -12,6 +12,12 @@ import type {
   ApiKey,
   TwoFactorSetupResponse,
   TwoFactorStatus,
+  ManagedApiKey,
+  CreateManagedApiKeyRequest,
+  CreateManagedApiKeyResponse,
+  ManagedKeyBindResponse,
+  ManagedKeyRotateResponse,
+  UpdateManagedApiKeyConfigRequest,
 } from '../types/index.js';
 
 export class AuthClient {
@@ -234,5 +240,158 @@ export class AuthClient {
 
   async get2faStatus(): Promise<TwoFactorStatus> {
     return this.http.get<TwoFactorStatus>('/auth/2fa/status');
+  }
+
+  // =========================================================================
+  // Managed API Keys
+  // =========================================================================
+
+  /**
+   * Create a managed API key with auto-rotation configuration.
+   *
+   * Managed keys automatically rotate based on the configured mode:
+   * - `scheduled`: Rotates at fixed intervals (e.g., every 24 hours)
+   * - `on-use`: Rotates after being used (TTL resets on each use)
+   * - `on-bind`: Rotates each time bind is called
+   *
+   * @param request - Managed key creation parameters
+   * @returns The created managed key metadata (no key value - use bind to get it)
+   */
+  async createManagedApiKey(request: CreateManagedApiKeyRequest): Promise<CreateManagedApiKeyResponse> {
+    const params = new URLSearchParams();
+    if (request.tenantId) params.append('tenantId', request.tenantId);
+    const query = params.toString();
+
+    return this.http.post<CreateManagedApiKeyResponse>(
+      `/auth/api-keys/managed${query ? `?${query}` : ''}`,
+      {
+        name: request.name,
+        permissions: request.permissions,
+        rotationMode: request.rotationMode,
+        rotationInterval: request.rotationInterval,
+        gracePeriod: request.gracePeriod,
+        description: request.description,
+        expiresInDays: request.expiresInDays,
+      }
+    );
+  }
+
+  /**
+   * List managed API keys.
+   *
+   * @param tenantId - Optional tenant ID filter (for superadmin)
+   * @returns List of managed keys
+   */
+  async listManagedApiKeys(tenantId?: string): Promise<{ keys: ManagedApiKey[]; total: number }> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.get<{ keys: ManagedApiKey[]; total: number }>(
+      `/auth/api-keys/managed${query ? `?${query}` : ''}`
+    );
+  }
+
+  /**
+   * Get a managed API key by name.
+   *
+   * @param name - The managed key name
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   * @returns The managed key metadata
+   */
+  async getManagedApiKey(name: string, tenantId?: string): Promise<ManagedApiKey> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.get<ManagedApiKey>(
+      `/auth/api-keys/managed/${encodeURIComponent(name)}${query ? `?${query}` : ''}`
+    );
+  }
+
+  /**
+   * Bind to a managed API key to get the current key value.
+   *
+   * This is the primary method for agents to obtain their API key.
+   * The response includes rotation metadata to help the SDK know when
+   * to re-bind for a new key.
+   *
+   * Security: This endpoint requires the caller to already have a valid
+   * API key (the current one, even during grace period). This prevents
+   * unauthorized access to managed keys.
+   *
+   * @param name - The managed key name
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   * @returns The current key value and rotation metadata
+   */
+  async bindManagedApiKey(name: string, tenantId?: string): Promise<ManagedKeyBindResponse> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.post<ManagedKeyBindResponse>(
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/bind${query ? `?${query}` : ''}`,
+      {}
+    );
+  }
+
+  /**
+   * Force rotate a managed API key.
+   *
+   * Creates a new key immediately, regardless of the rotation schedule.
+   * The old key remains valid during the grace period.
+   *
+   * @param name - The managed key name
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   * @returns The new key value and rotation info
+   */
+  async rotateManagedApiKey(name: string, tenantId?: string): Promise<ManagedKeyRotateResponse> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.post<ManagedKeyRotateResponse>(
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/rotate${query ? `?${query}` : ''}`,
+      {}
+    );
+  }
+
+  /**
+   * Update managed API key configuration.
+   *
+   * @param name - The managed key name
+   * @param config - Configuration updates
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   * @returns Updated managed key metadata
+   */
+  async updateManagedApiKeyConfig(
+    name: string,
+    config: UpdateManagedApiKeyConfigRequest,
+    tenantId?: string
+  ): Promise<ManagedApiKey> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.patch<ManagedApiKey>(
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/config${query ? `?${query}` : ''}`,
+      config
+    );
+  }
+
+  /**
+   * Delete a managed API key.
+   *
+   * @param name - The managed key name
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   */
+  async deleteManagedApiKey(name: string, tenantId?: string): Promise<void> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    await this.http.delete(
+      `/auth/api-keys/managed/${encodeURIComponent(name)}${query ? `?${query}` : ''}`
+    );
   }
 }

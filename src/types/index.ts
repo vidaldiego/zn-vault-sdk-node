@@ -165,6 +165,143 @@ export interface RotateApiKeyRequest {
   expiresInDays?: number;
 }
 
+// ============================================================================
+// Managed API Keys
+// ============================================================================
+
+/**
+ * Rotation mode for managed API keys.
+ *
+ * - `scheduled`: Key rotates at fixed intervals (e.g., every 24 hours)
+ * - `on-use`: Key rotates after being used (TTL resets on each use)
+ * - `on-bind`: Key rotates each time bind is called
+ */
+export type RotationMode = 'scheduled' | 'on-use' | 'on-bind';
+
+/**
+ * Managed API key metadata.
+ * Managed keys support automatic rotation with configurable modes.
+ */
+export interface ManagedApiKey {
+  id: string;
+  name: string;
+  tenantId: string;
+  permissions: string[];
+  description?: string;
+  rotationMode: RotationMode;
+  /** Duration between rotations (e.g., "24h", "7d") - required for scheduled mode */
+  rotationInterval?: string;
+  /** Grace period during which both old and new keys are valid (e.g., "5m", "1h") */
+  gracePeriod: string;
+  /** When the key was last rotated */
+  lastRotatedAt?: string;
+  /** When the next rotation will occur (for scheduled mode) */
+  nextRotationAt?: string;
+  enabled: boolean;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Request to create a managed API key.
+ */
+export interface CreateManagedApiKeyRequest {
+  /** Unique name for the managed key */
+  name: string;
+  /** Permissions for the key */
+  permissions: string[];
+  /** Rotation mode */
+  rotationMode: RotationMode;
+  /** Rotation interval (required for scheduled mode, e.g., "24h", "7d") */
+  rotationInterval?: string;
+  /** Grace period for smooth key transitions (e.g., "5m") */
+  gracePeriod?: string;
+  /** Optional description */
+  description?: string;
+  /** Expiration in days (optional) */
+  expiresInDays?: number;
+  /** Target tenant ID (required for superadmin) */
+  tenantId?: string;
+}
+
+/**
+ * Response from creating a managed API key.
+ */
+export interface CreateManagedApiKeyResponse {
+  /** The managed key metadata */
+  apiKey: ManagedApiKey;
+  message?: string;
+}
+
+/**
+ * Response from binding to a managed API key.
+ * This is what agents use to get the current key value.
+ */
+export interface ManagedKeyBindResponse {
+  /** The API key ID */
+  id: string;
+  /** The current API key value - use this for authentication */
+  key: string;
+  /** Key prefix for identification */
+  prefix: string;
+  /** Managed key name */
+  name: string;
+  /** When this key expires */
+  expiresAt: string;
+  /** Grace period duration */
+  gracePeriod: string;
+  /** Rotation mode */
+  rotationMode: RotationMode;
+  /** Permissions on the key */
+  permissions: string[];
+  /** When the next rotation will occur (helps SDK know when to re-bind) */
+  nextRotationAt?: string;
+  /** When the grace period expires (after this, old key stops working) */
+  graceExpiresAt?: string;
+}
+
+/**
+ * Response from rotating a managed API key.
+ */
+export interface ManagedKeyRotateResponse {
+  /** The new API key value */
+  key: string;
+  /** Managed key metadata */
+  apiKey: ManagedApiKey;
+  /** When the old key expires (grace period end) */
+  graceExpiresAt: string;
+  message?: string;
+}
+
+/**
+ * Request to update managed key configuration.
+ */
+export interface UpdateManagedApiKeyConfigRequest {
+  /** New rotation interval */
+  rotationInterval?: string;
+  /** New grace period */
+  gracePeriod?: string;
+  /** Enable/disable the key */
+  enabled?: boolean;
+}
+
+/**
+ * Configuration for managed key auto-rotation in the SDK.
+ */
+export interface ManagedKeyConfig {
+  /** The managed key name to bind to */
+  name: string;
+  /** Tenant ID (required for cross-tenant access) */
+  tenantId?: string;
+  /** How early before expiration to refresh (default: 30 seconds) */
+  refreshBeforeExpiryMs?: number;
+  /** Callback when key is rotated */
+  onKeyRotated?: (newKey: string, oldKey: string) => void;
+  /** Callback on rotation error */
+  onRotationError?: (error: Error) => void;
+}
+
 export interface TwoFactorSetupResponse {
   secret: string;
   qrCode: string;

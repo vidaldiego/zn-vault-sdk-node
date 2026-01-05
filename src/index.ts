@@ -12,6 +12,8 @@ import { PoliciesClient } from './admin/policies.js';
 import { AuditClient } from './audit/client.js';
 import { HealthClient } from './health/client.js';
 
+import type { ManagedKeyConfig, ManagedKeyBindResponse } from './types/index.js';
+
 export interface ZnVaultConfig {
   /** Base URL of the ZN-Vault server (e.g., 'https://vault.example.com:8443') */
   baseUrl: string;
@@ -23,6 +25,8 @@ export interface ZnVaultConfig {
   retries?: number;
   /** Skip TLS certificate verification (not recommended for production) */
   rejectUnauthorized?: boolean;
+  /** Configuration for managed API key auto-rotation */
+  managedKey?: ManagedKeyConfig;
 }
 
 export class ZnVaultClient {
@@ -45,6 +49,7 @@ export class ZnVaultClient {
       timeout: config.timeout ?? 30000,
       retries: config.retries ?? 3,
       rejectUnauthorized: config.rejectUnauthorized ?? true,
+      managedKey: config.managedKey,
     };
 
     this.httpClient = new HttpClient(httpConfig);
@@ -157,6 +162,85 @@ export class ZnVaultClient {
     this.httpClient.clearTokens();
   }
 
+  // =========================================================================
+  // Managed API Key Auto-Rotation
+  // =========================================================================
+
+  /**
+   * Initialize managed key mode for automatic rotation.
+   *
+   * This sets up the SDK to automatically rotate the API key before it expires.
+   * The SDK will call the bind endpoint to get new keys during the grace period.
+   *
+   * @example
+   * ```typescript
+   * const client = new ZnVaultClient({
+   *   baseUrl: 'https://vault.example.com:8443',
+   *   managedKey: {
+   *     name: 'my-agent-key',
+   *     onKeyRotated: (newKey, oldKey) => {
+   *       console.log('Key rotated!');
+   *     },
+   *   },
+   * });
+   *
+   * // Initialize with your current key value
+   * await client.initManagedKey('znv_xxx...');
+   *
+   * // Now use the client normally - keys will auto-rotate
+   * const secret = await client.secrets.get('my-secret');
+   * ```
+   *
+   * @param initialKey - The initial API key value (znv_xxx)
+   * @param config - Optional override config (uses constructor config if not provided)
+   * @returns The bind response with current key and rotation metadata
+   */
+  async initManagedKey(initialKey: string, config?: ManagedKeyConfig): Promise<ManagedKeyBindResponse> {
+    return this.httpClient.initManagedKey(initialKey, config);
+  }
+
+  /**
+   * Get the current API key value.
+   * Useful for debugging or passing to other systems.
+   */
+  getCurrentApiKey(): string | undefined {
+    return this.httpClient.getCurrentApiKey();
+  }
+
+  /**
+   * Check if using managed key mode with auto-rotation.
+   */
+  isManagedKeyMode(): boolean {
+    return this.httpClient.isManagedKeyMode();
+  }
+
+  /**
+   * Get managed key rotation information.
+   */
+  getManagedKeyInfo(): {
+    name: string;
+    nextRotationAt?: Date;
+    graceExpiresAt?: Date;
+    isRefreshing: boolean;
+  } | undefined {
+    return this.httpClient.getManagedKeyInfo();
+  }
+
+  /**
+   * Force refresh the managed key immediately.
+   * Useful if you detect a key issue or want to proactively rotate.
+   */
+  async refreshManagedKey(): Promise<ManagedKeyBindResponse> {
+    return this.httpClient.refreshManagedKey();
+  }
+
+  /**
+   * Stop managed key auto-rotation and clear state.
+   */
+  stopManagedKeyRotation() {
+    this.httpClient.stopManagedKeyRotation();
+  }
+
   /**
    * Create a new client instance with a builder pattern
    */
@@ -197,6 +281,28 @@ export class ZnVaultClientBuilder {
 
   rejectUnauthorized(value: boolean): this {
     this.config.rejectUnauthorized = value;
+    return this;
+  }
+
+  /**
+   * Configure managed API key auto-rotation.
+   *
+   * @example
+   * ```typescript
+   * const client = ZnVaultClient.builder()
+   *   .baseUrl('https://vault.example.com:8443')
+   *   .managedKey({
+   *     name: 'my-agent-key',
+   *     onKeyRotated: (newKey) => console.log('Rotated to', newKey),
+   *   })
+   *   .build();
+   *
+   * // Initialize with initial key
+   * await client.initManagedKey('znv_xxx...');
+   * ```
+   */
+  managedKey(config: ManagedKeyConfig): this {
+    this.config.managedKey = config;
     return this;
   }
 
