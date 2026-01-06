@@ -18,6 +18,11 @@ import type {
   ManagedKeyBindResponse,
   ManagedKeyRotateResponse,
   UpdateManagedApiKeyConfigRequest,
+  RegistrationToken,
+  CreateRegistrationTokenRequest,
+  CreateRegistrationTokenResponse,
+  ListRegistrationTokensResponse,
+  BootstrapResponse,
 } from '../types/index.js';
 
 export class AuthClient {
@@ -393,5 +398,97 @@ export class AuthClient {
     await this.http.delete(
       `/auth/api-keys/managed/${encodeURIComponent(name)}${query ? `?${query}` : ''}`
     );
+  }
+
+  // =========================================================================
+  // Registration Tokens (Agent Bootstrap)
+  // =========================================================================
+
+  /**
+   * Create a registration token for agent bootstrapping.
+   *
+   * Registration tokens are one-time use tokens that allow agents to
+   * obtain their managed API key without prior authentication.
+   *
+   * @param managedKeyName - The managed key to create a token for
+   * @param request - Token creation parameters
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   * @returns The created token (shown only once!)
+   */
+  async createRegistrationToken(
+    managedKeyName: string,
+    request: CreateRegistrationTokenRequest = {},
+    tenantId?: string
+  ): Promise<CreateRegistrationTokenResponse> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    return this.http.post<CreateRegistrationTokenResponse>(
+      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens${query ? `?${query}` : ''}`,
+      request
+    );
+  }
+
+  /**
+   * List registration tokens for a managed key.
+   *
+   * @param managedKeyName - The managed key name
+   * @param options - Optional filters
+   * @param options.includeUsed - Include tokens that have been used
+   * @param options.tenantId - Tenant ID (for cross-tenant access)
+   * @returns List of registration tokens
+   */
+  async listRegistrationTokens(
+    managedKeyName: string,
+    options?: { includeUsed?: boolean; tenantId?: string }
+  ): Promise<RegistrationToken[]> {
+    const params = new URLSearchParams();
+    if (options?.includeUsed) params.append('includeUsed', 'true');
+    if (options?.tenantId) params.append('tenantId', options.tenantId);
+    const query = params.toString();
+
+    const response = await this.http.get<ListRegistrationTokensResponse>(
+      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens${query ? `?${query}` : ''}`
+    );
+    return response.tokens;
+  }
+
+  /**
+   * Revoke a registration token.
+   *
+   * Prevents the token from being used for bootstrapping.
+   *
+   * @param managedKeyName - The managed key name
+   * @param tokenId - The token ID to revoke
+   * @param tenantId - Optional tenant ID (for cross-tenant access)
+   */
+  async revokeRegistrationToken(
+    managedKeyName: string,
+    tokenId: string,
+    tenantId?: string
+  ): Promise<void> {
+    const params = new URLSearchParams();
+    if (tenantId) params.append('tenantId', tenantId);
+    const query = params.toString();
+
+    await this.http.delete(
+      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens/${tokenId}${query ? `?${query}` : ''}`
+    );
+  }
+
+  /**
+   * Bootstrap an agent using a registration token.
+   *
+   * This is the unauthenticated endpoint used by agents to exchange a
+   * one-time registration token for a managed API key binding.
+   *
+   * Note: This method does not require prior authentication.
+   *
+   * @param token - The registration token (format: zrt_...)
+   * @returns The API key binding response
+   */
+  async bootstrap(token: string): Promise<BootstrapResponse> {
+    return this.http.post<BootstrapResponse>('/agent/bootstrap', { token });
   }
 }

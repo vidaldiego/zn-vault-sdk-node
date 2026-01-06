@@ -302,6 +302,88 @@ export interface ManagedKeyConfig {
   onRotationError?: (error: Error) => void;
 }
 
+// ============================================================================
+// Registration Tokens (Agent Bootstrap)
+// ============================================================================
+
+/**
+ * Registration token status.
+ */
+export type RegistrationTokenStatus = 'active' | 'used' | 'expired' | 'revoked';
+
+/**
+ * Registration token metadata.
+ * Tokens are used for one-time agent bootstrapping.
+ */
+export interface RegistrationToken {
+  id: string;
+  prefix: string;
+  managedKeyName: string;
+  tenantId: string;
+  createdBy: string;
+  createdByUsername?: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string | null;
+  usedByIp?: string | null;
+  revokedAt?: string | null;
+  description?: string | null;
+  status: RegistrationTokenStatus;
+}
+
+/**
+ * Request to create a registration token.
+ */
+export interface CreateRegistrationTokenRequest {
+  /** Token expiration (e.g., "1h", "24h"). Min 1m, max 24h. Default: 1h */
+  expiresIn?: string;
+  /** Optional description for audit trail */
+  description?: string;
+}
+
+/**
+ * Response from creating a registration token.
+ */
+export interface CreateRegistrationTokenResponse {
+  /** The full token value - shown only once! */
+  token: string;
+  /** Token prefix for identification (e.g., "zrt_abc1") */
+  prefix: string;
+  /** Token ID for management operations */
+  id: string;
+  /** The managed key this token is for */
+  managedKeyName: string;
+  /** Tenant ID */
+  tenantId: string;
+  /** When the token expires */
+  expiresAt: string;
+  /** Optional description */
+  description?: string | null;
+}
+
+/**
+ * Response from listing registration tokens.
+ */
+export interface ListRegistrationTokensResponse {
+  tokens: RegistrationToken[];
+}
+
+/**
+ * Response from the bootstrap endpoint.
+ */
+export interface BootstrapResponse {
+  /** The API key value */
+  key: string;
+  /** Managed key name */
+  name: string;
+  /** Permissions on the key */
+  permissions: string[];
+  /** When the key expires */
+  expiresAt: string;
+  /** Notice about token consumption */
+  _notice: string;
+}
+
 export interface TwoFactorSetupResponse {
   secret: string;
   qrCode: string;
