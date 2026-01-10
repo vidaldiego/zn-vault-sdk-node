@@ -15,7 +15,7 @@ import { HealthClient } from './health/client.js';
 import type { ManagedKeyConfig, ManagedKeyBindResponse } from './types/index.js';
 
 export interface ZnVaultConfig {
-  /** Base URL of the ZN-Vault server (e.g., 'https://vault.example.com:8443') */
+  /** Base URL of the ZnVault server (e.g., 'https://vault.example.com:8443') */
   baseUrl: string;
   /** API key for authentication (optional, use instead of JWT) */
   apiKey?: string;

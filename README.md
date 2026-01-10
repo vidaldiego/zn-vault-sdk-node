@@ -1,6 +1,6 @@
 # @zincapp/znvault-sdk
 
-Official Node.js/TypeScript SDK for ZN-Vault secrets management system.
+Official Node.js/TypeScript SDK for ZnVault secrets management system.
 
 ## Installation
 

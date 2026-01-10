@@ -6,10 +6,10 @@ import { ZnVaultClient } from '../src/index.js';
 import { TestConfig } from './test-config.js';
 
 /**
- * Integration tests that run against a real ZN-Vault server.
+ * Integration tests that run against a real ZnVault server.
  *
  * These tests require:
- * - A running ZN-Vault server
+ * - A running ZnVault server
  * - Environment variable: ZNVAULT_BASE_URL (e.g., "https://localhost:8443")
  *
  * Run with: ZNVAULT_BASE_URL=https://localhost:8443 npm test
