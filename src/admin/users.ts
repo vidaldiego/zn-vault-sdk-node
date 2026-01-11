@@ -46,8 +46,8 @@ export class UsersClient {
     if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.role) params.set('role', filter.role);
     if (filter?.status) params.set('status', filter.status);
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/users?${query}` : '/v1/users';

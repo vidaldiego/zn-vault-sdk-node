@@ -44,8 +44,8 @@ export class RolesClient {
     if (filter?.includeSystem !== undefined) {
       params.set('includeSystem', filter.includeSystem.toString());
     }
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/roles?${query}` : '/v1/roles';

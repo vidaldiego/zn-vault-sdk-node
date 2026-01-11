@@ -89,8 +89,8 @@ export class SecretsClient {
     if (filter?.expiringBefore) params.set('expiringBefore', filter.expiringBefore);
     if (filter?.tags) params.set('tags', filter.tags.join(','));
     if (filter?.aliasPrefix) params.set('aliasPrefix', filter.aliasPrefix);
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/secrets?${query}` : '/v1/secrets';
@@ -352,12 +352,12 @@ export class SecretsClient {
    */
   async listBySubType(
     subType: SecretSubType,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Secret>> {
     return this.list({
       subType,
-      page: options?.page,
-      pageSize: options?.pageSize,
+      limit: options?.limit,
+      offset: options?.offset,
     });
   }
 
@@ -366,12 +366,12 @@ export class SecretsClient {
    */
   async listByType(
     type: SecretType,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Secret>> {
     return this.list({
       type,
-      page: options?.page,
-      pageSize: options?.pageSize,
+      limit: options?.limit,
+      offset: options?.offset,
     });
   }
 
@@ -380,7 +380,7 @@ export class SecretsClient {
    */
   async listExpiringCertificates(
     beforeDate: Date | string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Secret>> {
     const expiringBefore = beforeDate instanceof Date
       ? beforeDate.toISOString()
@@ -389,8 +389,8 @@ export class SecretsClient {
     return this.list({
       subType: 'certificate',
       expiringBefore,
-      page: options?.page,
-      pageSize: options?.pageSize,
+      limit: options?.limit,
+      offset: options?.offset,
     });
   }
 
@@ -399,7 +399,7 @@ export class SecretsClient {
    */
   async listExpiring(
     beforeDate: Date | string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Secret>> {
     const expiringBefore = beforeDate instanceof Date
       ? beforeDate.toISOString()
@@ -407,8 +407,8 @@ export class SecretsClient {
 
     return this.list({
       expiringBefore,
-      page: options?.page,
-      pageSize: options?.pageSize,
+      limit: options?.limit,
+      offset: options?.offset,
     });
   }
 
@@ -417,12 +417,12 @@ export class SecretsClient {
    */
   async listByPath(
     aliasPrefix: string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Secret>> {
     return this.list({
       aliasPrefix,
-      page: options?.page,
-      pageSize: options?.pageSize,
+      limit: options?.limit,
+      offset: options?.offset,
     });
   }
 

@@ -41,8 +41,8 @@ export class KmsClient {
     const params = new URLSearchParams();
     if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.state) params.set('state', filter.state);
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/kms/keys?${query}` : '/v1/kms/keys';

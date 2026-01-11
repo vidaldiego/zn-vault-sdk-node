@@ -104,8 +104,8 @@ export class CertificatesClient {
     if (filter?.status) params.set('status', filter.status);
     if (filter?.expiringBefore) params.set('expiringBefore', filter.expiringBefore);
     if (filter?.tags) params.set('tags', filter.tags.join(','));
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/certificates?${query}` : '/v1/certificates';
@@ -355,13 +355,13 @@ export class CertificatesClient {
   async listByClient(
     clientId: string,
     tenantId?: string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Certificate>> {
     return this.list(
       {
         clientId,
-        page: options?.page,
-        pageSize: options?.pageSize,
+        limit: options?.limit,
+        offset: options?.offset,
       },
       tenantId
     );
@@ -373,13 +373,13 @@ export class CertificatesClient {
   async listByKind(
     kind: string,
     tenantId?: string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Certificate>> {
     return this.list(
       {
         kind,
-        page: options?.page,
-        pageSize: options?.pageSize,
+        limit: options?.limit,
+        offset: options?.offset,
       },
       tenantId
     );
@@ -390,13 +390,13 @@ export class CertificatesClient {
    */
   async listActive(
     tenantId?: string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Certificate>> {
     return this.list(
       {
         status: 'ACTIVE',
-        page: options?.page,
-        pageSize: options?.pageSize,
+        limit: options?.limit,
+        offset: options?.offset,
       },
       tenantId
     );
@@ -407,13 +407,13 @@ export class CertificatesClient {
    */
   async listExpired(
     tenantId?: string,
-    options?: { page?: number; pageSize?: number }
+    options?: { limit?: number; offset?: number }
   ): Promise<PaginatedResponse<Certificate>> {
     return this.list(
       {
         status: 'EXPIRED',
-        page: options?.page,
-        pageSize: options?.pageSize,
+        limit: options?.limit,
+        offset: options?.offset,
       },
       tenantId
     );

@@ -445,8 +445,8 @@ export interface UserFilter {
   tenantId?: string;
   role?: UserRole;
   status?: UserStatus;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 // ============================================================================
@@ -564,8 +564,8 @@ export interface SecretFilter {
   tags?: string[];
   /** Filter by alias prefix (e.g., "web/*") */
   aliasPrefix?: string;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
   /** Tenant ID (required for superadmin, optional for tenant-scoped users) */
   tenantId?: string;
 }
@@ -746,8 +746,8 @@ export interface GenerateDataKeyResponse {
 export interface KeyFilter {
   tenantId?: string;
   state?: KeyState;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 // ============================================================================
@@ -806,8 +806,8 @@ export interface TenantUsage {
 export interface TenantFilter {
   status?: TenantStatus;
   includeUsage?: boolean;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 // ============================================================================
@@ -841,8 +841,8 @@ export interface UpdateRoleRequest {
 export interface RoleFilter {
   tenantId?: string;
   includeSystem?: boolean;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface Permission {
@@ -895,8 +895,8 @@ export interface UpdatePolicyRequest {
 export interface PolicyFilter {
   tenantId?: string;
   enabled?: boolean;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 // ============================================================================
@@ -928,8 +928,8 @@ export interface AuditFilter {
   tenantId?: string;
   resourceType?: string;
   success?: boolean;
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface AuditStats {
@@ -968,10 +968,12 @@ export interface HealthCheck {
 
 export interface PaginatedResponse<T> {
   items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
 }
 
 // ============================================================================
@@ -1114,8 +1116,8 @@ export interface CertificateFilter {
   status?: CertificateStatus;
   expiringBefore?: string;
   tags?: string[];
-  page?: number;
-  pageSize?: number;
+  limit?: number;
+  offset?: number;
 }
 
 /**

@@ -26,8 +26,8 @@ export class AuditClient {
     if (filter?.resourceType) params.set('resourceType', filter.resourceType);
     if (filter?.startDate) params.set('startDate', filter.startDate);
     if (filter?.endDate) params.set('endDate', filter.endDate);
-    if (filter?.page) params.set('page', filter.page.toString());
-    if (filter?.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter?.limit) params.set('limit', filter.limit.toString());
+    if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/audit?${query}` : '/v1/audit';
