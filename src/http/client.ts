@@ -2,10 +2,14 @@
 
 import https from 'node:https';
 import type { ZnVaultErrorResponse, ManagedKeyBindResponse, ManagedKeyConfig } from '../types/index.js';
+import type { AuthProvider } from '../auth/provider.js';
+import { isRefreshableAuthProvider } from '../auth/provider.js';
 
 export interface HttpClientConfig {
   baseUrl: string;
   apiKey?: string;
+  /** Auth provider for API key authentication (alternative to apiKey) */
+  authProvider?: AuthProvider;
   timeout?: number;
   retries?: number;
   rejectUnauthorized?: boolean;
@@ -99,6 +103,7 @@ interface RequestOptions {
 export class HttpClient {
   private baseUrl: string;
   private apiKey?: string;
+  private authProvider?: AuthProvider;
   private accessToken?: string;
   private refreshToken?: string;
   private timeout: number;
@@ -112,10 +117,13 @@ export class HttpClient {
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.apiKey = config.apiKey;
+    this.authProvider = config.authProvider;
     this.timeout = config.timeout ?? 30000;
     this.retryAttempts = config.retries ?? 3;
     this.retryDelay = 1000;
-    this.rejectUnauthorized = config.rejectUnauthorized ?? true;
+    // Respect NODE_TLS_REJECT_UNAUTHORIZED env var if rejectUnauthorized not explicitly set
+    this.rejectUnauthorized =
+      config.rejectUnauthorized ?? (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0');
     this.managedKeyConfig = config.managedKey;
   }
 
@@ -192,7 +200,21 @@ export class HttpClient {
    * Useful for debugging or passing to other systems.
    */
   getCurrentApiKey(): string | undefined {
-    return this.apiKey;
+    // Priority: managed key state > direct apiKey > auth provider
+    if (this.managedKeyState) {
+      return this.managedKeyState.currentKey;
+    }
+    if (this.apiKey) {
+      return this.apiKey;
+    }
+    return this.authProvider?.getApiKey();
+  }
+
+  /**
+   * Get the auth provider if set.
+   */
+  getAuthProvider(): AuthProvider | undefined {
+    return this.authProvider;
   }
 
   /**
@@ -369,6 +391,7 @@ export class HttpClient {
 
   async request<T>(options: RequestOptions): Promise<T> {
     let lastError: Error | undefined;
+    let authProviderRefreshAttempted = false;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
       try {
@@ -376,7 +399,13 @@ export class HttpClient {
       } catch (error) {
         lastError = error as Error;
 
-        if (error instanceof AuthenticationError && this.tokenRefreshCallback && attempt === 0) {
+        // Handle 401 with JWT token refresh (only if we have a refresh token)
+        if (
+          error instanceof AuthenticationError &&
+          this.tokenRefreshCallback &&
+          this.refreshToken &&
+          attempt === 0
+        ) {
           try {
             const newToken = await this.tokenRefreshCallback();
             this.accessToken = newToken;
@@ -384,6 +413,22 @@ export class HttpClient {
           } catch {
             throw error;
           }
+        }
+
+        // Handle 401 with refreshable auth provider (file-based API key)
+        if (
+          error instanceof AuthenticationError &&
+          this.authProvider &&
+          isRefreshableAuthProvider(this.authProvider) &&
+          !authProviderRefreshAttempted
+        ) {
+          authProviderRefreshAttempted = true;
+          if (this.authProvider.onAuthenticationError()) {
+            // Key was refreshed, retry the request
+            continue;
+          }
+          // Key unchanged, don't retry - it's a real auth error
+          throw error;
         }
 
         if (error instanceof RateLimitError) {
@@ -418,8 +463,10 @@ export class HttpClient {
         headers['Content-Type'] = 'application/json';
       }
 
-      if (this.apiKey) {
-        headers['X-API-Key'] = this.apiKey;
+      // Get API key from: direct apiKey > auth provider
+      const apiKey = this.apiKey ?? this.authProvider?.getApiKey();
+      if (apiKey) {
+        headers['X-API-Key'] = apiKey;
       } else if (this.accessToken) {
         headers['Authorization'] = `Bearer ${this.accessToken}`;
       }

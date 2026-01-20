@@ -1,6 +1,6 @@
 {
   "name": "@zincapp/znvault-sdk",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Node.js/TypeScript SDK for ZnVault secrets management",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./sso": {
+      "types": "./dist/sso/index.d.ts",
+      "import": "./dist/sso/index.mjs",
+      "require": "./dist/sso/index.js"
     }
   },
   "files": [

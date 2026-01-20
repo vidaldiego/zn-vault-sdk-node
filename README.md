@@ -65,6 +65,66 @@ const client = new ZnVaultClient({
 });
 ```
 
+### Environment Variables (fromEnv)
+
+The simplest way to configure the client, especially when using zn-vault-agent:
+
+```typescript
+// Uses default environment variables:
+// - ZINC_CONFIG_VAULT_URL (defaults to https://localhost:8443 if not set)
+// - ZINC_CONFIG_VAULT_API_KEY or ZINC_CONFIG_VAULT_API_KEY_FILE
+const client = ZnVaultClient.fromEnv();
+
+// Use custom environment variable names
+const client = ZnVaultClient.fromEnvCustom('MY_VAULT_URL', 'MY_API_KEY');
+```
+
+**Environment Variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `ZINC_CONFIG_VAULT_URL` | Vault server URL (optional, defaults to `https://localhost:8443`) |
+| `ZINC_CONFIG_VAULT_API_KEY` | Direct API key value |
+| `ZINC_CONFIG_VAULT_API_KEY_FILE` | Path to file containing API key (preferred, supports auto-refresh) |
+
+When using `_FILE` suffix, the SDK reads the API key from the specified file and automatically re-reads it on 401 errors. This enables seamless key rotation by zn-vault-agent.
+
+**Builder with Environment:**
+
+```typescript
+// Read API key from environment with auto-detection
+const client = ZnVaultClient.builder()
+  .baseUrl('https://vault.example.com:8443')
+  .apiKeyFromEnv('VAULT_API_KEY')  // Checks VAULT_API_KEY_FILE first, then VAULT_API_KEY
+  .build();
+
+// Or specify file path directly
+const client = ZnVaultClient.builder()
+  .baseUrl('https://vault.example.com:8443')
+  .apiKeyFile('/run/zn-vault-agent/secrets/api-key')
+  .build();
+```
+
+### File-Based API Keys (Auto-Refresh)
+
+When using file-based API keys, the SDK automatically handles key rotation:
+
+1. On initialization, the API key is read from the file
+2. The key is cached in memory for subsequent requests
+3. When a 401 error occurs, the SDK re-reads the file
+4. If the key changed (rotated by agent), the request is automatically retried
+
+```typescript
+// Using file-based auth directly
+import { FileApiKeyAuth } from '@zincapp/znvault-sdk';
+
+const authProvider = new FileApiKeyAuth('/run/zn-vault-agent/secrets/api-key');
+console.log('Current key prefix:', authProvider.getApiKey().slice(0, 8));
+
+// Force refresh from file
+authProvider.refresh();
+```
+
 ## Authentication
 
 ### JWT Authentication

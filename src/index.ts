@@ -11,14 +11,29 @@ import { TenantsClient } from './admin/tenants.js';
 import { PoliciesClient } from './admin/policies.js';
 import { AuditClient } from './audit/client.js';
 import { HealthClient } from './health/client.js';
+import {
+  type AuthProvider,
+  FileApiKeyAuth,
+} from './auth/provider.js';
 
 import type { ManagedKeyConfig, ManagedKeyBindResponse } from './types/index.js';
+
+/** Default environment variable name for vault URL */
+export const DEFAULT_URL_ENV = 'ZINC_CONFIG_VAULT_URL';
+
+/** Default environment variable name for API key */
+export const DEFAULT_API_KEY_ENV = 'ZINC_CONFIG_VAULT_API_KEY';
+
+/** Default base URL when not specified */
+export const DEFAULT_BASE_URL = 'https://localhost:8443';
 
 export interface ZnVaultConfig {
   /** Base URL of the ZnVault server (e.g., 'https://vault.example.com:8443') */
   baseUrl: string;
   /** API key for authentication (optional, use instead of JWT) */
   apiKey?: string;
+  /** Path to file containing API key (supports auto-refresh on rotation) */
+  apiKeyFile?: string;
   /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
   /** Number of retry attempts for failed requests (default: 3) */
@@ -43,12 +58,21 @@ export class ZnVaultClient {
   private _health: HealthClient;
 
   constructor(config: ZnVaultConfig) {
+    // Determine auth provider based on config priority:
+    // 1. Direct apiKey
+    // 2. apiKeyFile (file-based with auto-refresh)
+    let authProvider: AuthProvider | undefined;
+    if (config.apiKeyFile && !config.apiKey) {
+      authProvider = new FileApiKeyAuth(config.apiKeyFile);
+    }
+
     const httpConfig: HttpClientConfig = {
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
+      authProvider,
       timeout: config.timeout ?? 30000,
       retries: config.retries ?? 3,
-      rejectUnauthorized: config.rejectUnauthorized ?? true,
+      rejectUnauthorized: config.rejectUnauthorized, // Let HttpClient handle default (respects NODE_TLS_REJECT_UNAUTHORIZED)
       managedKey: config.managedKey,
     };
 
@@ -254,18 +278,132 @@ export class ZnVaultClient {
   static create(baseUrl: string): ZnVaultClient {
     return new ZnVaultClient({ baseUrl });
   }
+
+  /**
+   * Create a client from environment variables.
+   *
+   * Uses default environment variable names:
+   * - `ZINC_CONFIG_VAULT_URL` for the vault URL (defaults to https://localhost:8443)
+   * - `ZINC_CONFIG_VAULT_API_KEY` for the API key
+   * - `ZINC_CONFIG_VAULT_API_KEY_FILE` for file-based API key (takes precedence, supports auto-refresh)
+   *
+   * ## Example
+   *
+   * ```typescript
+   * // Agent injects:
+   * //   ZINC_CONFIG_VAULT_URL=https://vault.example.com
+   * //   ZINC_CONFIG_VAULT_API_KEY_FILE=/run/zn-vault-agent/secrets/ZINC_CONFIG_VAULT_API_KEY
+   *
+   * const client = ZnVaultClient.fromEnv();
+   * const secret = await client.secrets.get('my-secret');  // Auto-refreshes on key rotation
+   * ```
+   *
+   * @returns ZnVaultClient configured from environment
+   * @throws Error if required environment variables are not set
+   */
+  static fromEnv(): ZnVaultClient {
+    const baseUrl = process.env[DEFAULT_URL_ENV] ?? DEFAULT_BASE_URL;
+    return ZnVaultClient.builder()
+      .baseUrl(baseUrl)
+      .apiKeyFromEnv(DEFAULT_API_KEY_ENV)
+      .build();
+  }
+
+  /**
+   * Create a client from custom environment variable names.
+   *
+   * ## Example
+   *
+   * ```typescript
+   * // Custom env vars:
+   * //   MY_VAULT_URL=https://vault.example.com
+   * //   MY_API_KEY_FILE=/path/to/api-key
+   *
+   * const client = ZnVaultClient.fromEnv('MY_VAULT_URL', 'MY_API_KEY');
+   * ```
+   *
+   * @param urlEnvName Environment variable name for vault URL
+   * @param apiKeyEnvName Environment variable name for API key (checks _FILE suffix first)
+   * @returns ZnVaultClient configured from environment
+   * @throws Error if required environment variables are not set
+   */
+  static fromEnvCustom(urlEnvName: string, apiKeyEnvName: string): ZnVaultClient {
+    const baseUrl = process.env[urlEnvName];
+    if (!baseUrl) {
+      throw new Error(`Environment variable ${urlEnvName} not set`);
+    }
+    return ZnVaultClient.builder()
+      .baseUrl(baseUrl)
+      .apiKeyFromEnv(apiKeyEnvName)
+      .build();
+  }
 }
 
 export class ZnVaultClientBuilder {
   private config: Partial<ZnVaultConfig> = {};
+  private _apiKeyEnvName?: string;
 
   baseUrl(url: string): this {
     this.config.baseUrl = url;
     return this;
   }
 
+  /**
+   * Set API key for authentication.
+   *
+   * When set, the client will use API key authentication instead of JWT.
+   * For automatic key rotation support, use `apiKeyFile()` or `apiKeyFromEnv()` instead.
+   *
+   * @param key API key (e.g., "znv_xxxx_secretkey")
+   */
   apiKey(key: string): this {
     this.config.apiKey = key;
+    this.config.apiKeyFile = undefined;
+    this._apiKeyEnvName = undefined;
+    return this;
+  }
+
+  /**
+   * Set API key file path for authentication with automatic refresh.
+   *
+   * The API key will be read from the specified file. When a 401 error
+   * occurs, the file will be re-read and the request retried if the
+   * key has changed. This supports automatic key rotation by zn-vault-agent.
+   *
+   * @param filePath Path to file containing the API key
+   */
+  apiKeyFile(filePath: string): this {
+    this.config.apiKeyFile = filePath;
+    this.config.apiKey = undefined;
+    this._apiKeyEnvName = undefined;
+    return this;
+  }
+
+  /**
+   * Set API key from environment variable with automatic file detection.
+   *
+   * Checks for the API key in this order:
+   * 1. `{envName}_FILE` - path to file containing the key (supports auto-refresh)
+   * 2. `{envName}` - direct API key value
+   *
+   * This is the recommended approach when using zn-vault-agent, which sets
+   * the _FILE variant automatically.
+   *
+   * @example
+   * ```typescript
+   * // With env: VAULT_API_KEY_FILE=/run/zn-vault-agent/secrets/api-key
+   * const client = ZnVaultClient.builder()
+   *   .baseUrl('https://vault.example.com')
+   *   .apiKeyFromEnv('VAULT_API_KEY')
+   *   .build();
+   * ```
+   *
+   * @param envName Base environment variable name
+   */
+  apiKeyFromEnv(envName: string): this {
+    this._apiKeyEnvName = envName;
+    this.config.apiKey = undefined;
+    this.config.apiKeyFile = undefined;
     return this;
   }
 
@@ -310,6 +448,23 @@ export class ZnVaultClientBuilder {
     if (!this.config.baseUrl) {
       throw new Error('baseUrl is required');
     }
+
+    // Resolve apiKeyFromEnv if set
+    if (this._apiKeyEnvName) {
+      const filePath = process.env[`${this._apiKeyEnvName}_FILE`];
+      const directValue = process.env[this._apiKeyEnvName];
+
+      if (filePath) {
+        this.config.apiKeyFile = filePath;
+      } else if (directValue) {
+        this.config.apiKey = directValue;
+      } else {
+        throw new Error(
+          `No API key configured. Set either ${this._apiKeyEnvName}_FILE (recommended) or ${this._apiKeyEnvName} environment variable.`
+        );
+      }
+    }
+
     return new ZnVaultClient(this.config as ZnVaultConfig);
   }
 }
@@ -326,6 +481,15 @@ export { UsersClient, RolesClient, TenantsClient, PoliciesClient } from './admin
 export { AuditClient, type AuditVerifyResult } from './audit/index.js';
 export { HealthClient, type HealthStatus, type ReadinessStatus } from './health/index.js';
 
+// Re-export auth providers
+export {
+  type AuthProvider,
+  type RefreshableAuthProvider,
+  ApiKeyAuth,
+  FileApiKeyAuth,
+  isRefreshableAuthProvider,
+} from './auth/index.js';
+
 // Re-export errors
 export {
   ZnVaultError,
@@ -335,3 +499,17 @@ export {
   RateLimitError,
   ValidationError,
 } from './http/client.js';
+
+// Re-export SSO client for token validation
+export {
+  SSOClient,
+  SSOError,
+  SSOAuthError,
+  createSSOClient,
+  createFastifySSOAuth,
+  createExpressSSOAuth,
+  type SSOClientConfig,
+  type ValidatedToken,
+  type TokenIntrospectionResponse,
+  type SSORequest,
+} from './sso/index.js';
