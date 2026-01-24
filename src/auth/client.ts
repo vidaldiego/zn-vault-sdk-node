@@ -167,7 +167,8 @@ export class AuthClient {
    * @returns Object containing all keys and keys expiring soon
    */
   async listApiKeys(): Promise<{ keys: ApiKey[]; expiringSoon: ApiKey[] }> {
-    return this.http.get('/auth/api-keys');
+    const response = await this.http.get<{ items: ApiKey[]; expiringSoon: ApiKey[] }>('/auth/api-keys');
+    return { keys: response.items, expiringSoon: response.expiringSoon };
   }
 
   /**
@@ -210,8 +211,8 @@ export class AuthClient {
    * @returns The current API key metadata with expiration info
    */
   async getCurrentApiKey(): Promise<ApiKey & { expiresInDays: number; isExpiringSoon: boolean }> {
-    const response = await this.http.get<{ apiKey: ApiKey; expiresInDays: number; isExpiringSoon: boolean }>('/auth/api-keys/self');
-    return { ...response.apiKey, expiresInDays: response.expiresInDays, isExpiringSoon: response.isExpiringSoon };
+    // API returns flat object with ApiKey fields + expiresInDays + isExpiringSoon
+    return this.http.get<ApiKey & { expiresInDays: number; isExpiringSoon: boolean }>('/auth/api-keys/self');
   }
 
   /**
@@ -292,9 +293,10 @@ export class AuthClient {
     if (tenantId) params.append('tenantId', tenantId);
     const query = params.toString();
 
-    return this.http.get<{ keys: ManagedApiKey[]; total: number }>(
+    const response = await this.http.get<{ items: ManagedApiKey[]; pagination: { total: number } }>(
       `/auth/api-keys/managed${query ? `?${query}` : ''}`
     );
+    return { keys: response.items, total: response.pagination.total };
   }
 
   /**

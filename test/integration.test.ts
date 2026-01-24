@@ -267,10 +267,10 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
       }
 
       // List secrets
-      const secrets = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
+      const response = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
 
-      expect(secrets.length).toBeGreaterThanOrEqual(3);
-      console.log(`✓ Listed ${secrets.length} secrets`);
+      expect(response.items.length).toBeGreaterThanOrEqual(3);
+      console.log(`✓ Listed ${response.items.length} secrets`);
     });
 
     it('should delete a secret', async () => {
