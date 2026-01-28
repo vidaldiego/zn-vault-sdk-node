@@ -301,7 +301,8 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let createdUserIds: string[] = [];
 
     beforeAll(async () => {
-      client = await TestConfig.createSuperadminClient();
+      // Use tenant admin - has user management permissions within their tenant
+      client = await TestConfig.createTenantAdminClient();
     });
 
     afterEach(async () => {
@@ -318,9 +319,10 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should list users', async () => {
-      const users = await client.users.list();
-      expect(users).toBeDefined();
-      console.log(`✓ Listed ${users.length} users`);
+      const response = await client.users.list();
+      expect(response).toBeDefined();
+      expect(response.items).toBeDefined();
+      console.log(`✓ Listed ${response.items.length} users`);
     });
 
     it('should create a new user', async () => {
@@ -330,7 +332,6 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
         username,
         password: 'TestPassword123#',
         email: `${username}@example.com`,
-        tenantId: TestConfig.DEFAULT_TENANT,
         role: 'user',
       });
 
@@ -350,7 +351,6 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
       const user = await client.users.create({
         username,
         password: 'TestPassword123#',
-        tenantId: TestConfig.DEFAULT_TENANT,
       });
 
       // Delete it (don't add to cleanup list)
@@ -363,17 +363,21 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
   // ===================
   // Tenant Management Tests
   // ===================
+  // Note: Tenant operations require superadmin via /v1/superadmin/* routes
+  // SDK currently uses /v1/* routes, so these tests use tenant admin for basic read
   describe('Tenant Management', () => {
     let client: ZnVaultClient;
 
     beforeAll(async () => {
-      client = await TestConfig.createSuperadminClient();
+      // Use tenant admin - can read their own tenant info
+      client = await TestConfig.createTenantAdminClient();
     });
 
     it('should list tenants', async () => {
-      const tenants = await client.tenants.list();
-      expect(tenants).toBeDefined();
-      console.log(`✓ Listed ${tenants.length} tenants`);
+      const response = await client.tenants.list();
+      expect(response).toBeDefined();
+      expect(response.items).toBeDefined();
+      console.log(`✓ Listed ${response.items.length} tenants`);
     });
 
     it('should get tenant by ID', async () => {
@@ -390,13 +394,15 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeAll(async () => {
-      client = await TestConfig.createSuperadminClient();
+      // Use tenant admin - can manage roles within their tenant
+      client = await TestConfig.createTenantAdminClient();
     });
 
     it('should list roles', async () => {
-      const roles = await client.roles.list();
-      expect(roles).toBeDefined();
-      console.log(`✓ Listed ${roles.length} roles`);
+      const response = await client.roles.list();
+      expect(response).toBeDefined();
+      expect(response.items).toBeDefined();
+      console.log(`✓ Listed ${response.items.length} roles`);
     });
   });
 
@@ -407,13 +413,15 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeAll(async () => {
-      client = await TestConfig.createSuperadminClient();
+      // Use tenant admin - can view audit logs within their tenant
+      client = await TestConfig.createTenantAdminClient();
     });
 
     it('should list audit logs', async () => {
-      const logs = await client.audit.list();
-      expect(logs).toBeDefined();
-      console.log(`✓ Listed ${logs.length} audit entries`);
+      const response = await client.audit.list();
+      expect(response).toBeDefined();
+      expect(response.items).toBeDefined();
+      console.log(`✓ Listed ${response.items.length} audit entries`);
     });
   });
 });

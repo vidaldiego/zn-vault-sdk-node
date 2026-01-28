@@ -2,70 +2,67 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { ZnVaultClient } from '../src/index.js';
+import { TestConfig } from './test-config.js';
 
-const BASE_URL = process.env.ZNVAULT_BASE_URL || process.env.ZN_VAULT_URL || 'https://localhost:8443';
-// Note: Username must be in format "tenant/username" for non-superadmin users.
-// Superadmin can omit tenant prefix. Email can also be used as username.
-const ADMIN_USER = process.env.ZNVAULT_USERNAME || process.env.ZN_VAULT_USER || 'admin';
-const ADMIN_PASS = process.env.ZNVAULT_PASSWORD || process.env.ZN_VAULT_PASS || 'Admin123456#';
-const TENANT_ID = process.env.ZNVAULT_TENANT || 'sdk-test';
+// Skip all tests if integration environment not configured
+const shouldRunIntegration = TestConfig.isIntegrationEnabled();
 
-describe('AuthClient', () => {
-  let client: ZnVaultClient;
-
-  beforeAll(() => {
-    client = ZnVaultClient.builder()
-      .baseUrl(BASE_URL)
-      .rejectUnauthorized(false)
-      .build();
-  });
-
+describe.skipIf(!shouldRunIntegration)('AuthClient', () => {
   describe('API Key Management', () => {
-    it('should create an API key', async () => {
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
+    let client: ZnVaultClient;
+    const createdKeyIds: string[] = [];
 
+    beforeAll(async () => {
+      // Create and authenticate a client once for all tests
+      client = await TestConfig.createTenantAdminClient();
+    });
+
+    afterAll(async () => {
+      // Cleanup all created API keys
+      for (const id of createdKeyIds) {
+        try {
+          await client.auth.deleteApiKey(id);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    it('should create an API key', async () => {
       const response = await client.auth.createApiKey({
         name: `test-key-${Date.now()}`,
         permissions: ['secret:read:metadata', 'secret:read:value'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
       });
+
+      createdKeyIds.push(response.apiKey.id);
 
       expect(response.key).toBeDefined();
       expect(response.key).toMatch(/^znv_/);
       expect(response.apiKey).toBeDefined();
       expect(response.apiKey.id).toBeDefined();
       expect(response.apiKey.permissions).toContain('secret:read:metadata');
-
-      // Cleanup
-      await client.auth.deleteApiKey(response.apiKey.id);
     });
 
     it('should create an API key with conditions', async () => {
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
       const response = await client.auth.createApiKey({
         name: `test-key-conditions-${Date.now()}`,
         permissions: ['secret:read:metadata'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
         conditions: {
           ip: ['10.0.0.0/8'],
           methods: ['GET'],
         },
       });
 
+      createdKeyIds.push(response.apiKey.id);
+
       expect(response.key).toBeDefined();
       expect(response.apiKey.conditions).toBeDefined();
       expect(response.apiKey.conditions?.ip).toContain('10.0.0.0/8');
-
-      // Cleanup
-      await client.auth.deleteApiKey(response.apiKey.id);
     });
 
     it('should list API keys', async () => {
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
       const response = await client.auth.listApiKeys();
 
       expect(response.keys).toBeDefined();
@@ -73,41 +70,36 @@ describe('AuthClient', () => {
     });
 
     it('should rotate an API key by ID', async () => {
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
       // Create a key to rotate
       const original = await client.auth.createApiKey({
         name: `rotate-test-${Date.now()}`,
         permissions: ['secret:read:metadata'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
       });
 
       // Rotate the key
       const rotated = await client.auth.rotateApiKey(original.apiKey.id);
 
+      createdKeyIds.push(rotated.apiKey.id);
+
       expect(rotated.key).toBeDefined();
       expect(rotated.key).not.toBe(original.key);
       expect(rotated.apiKey.name).toBe(original.apiKey.name);
-
-      // Cleanup
-      await client.auth.deleteApiKey(rotated.apiKey.id);
     });
 
     it('should get current API key info when authenticated via API key', async () => {
-      // First login and create an API key
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
+      // Create an API key
       const keyResponse = await client.auth.createApiKey({
         name: `self-test-${Date.now()}`,
         permissions: ['secret:read:metadata'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
       });
+
+      createdKeyIds.push(keyResponse.apiKey.id);
 
       // Create a new client with the API key
       const apiKeyClient = ZnVaultClient.builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(TestConfig.BASE_URL)
         .apiKey(keyResponse.key)
         .rejectUnauthorized(false)
         .build();
@@ -118,25 +110,19 @@ describe('AuthClient', () => {
       expect(currentKey).toBeDefined();
       expect(currentKey.name).toBe(keyResponse.apiKey.name);
       expect(currentKey.prefix).toBe(keyResponse.apiKey.prefix);
-
-      // Cleanup
-      await client.auth.deleteApiKey(keyResponse.apiKey.id);
     });
 
     it('should self-rotate the current API key', async () => {
-      // First login and create an API key
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
+      // Create an API key
       const originalKey = await client.auth.createApiKey({
         name: `self-rotate-test-${Date.now()}`,
         permissions: ['secret:read:metadata'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
       });
 
       // Create a new client with the API key
       const apiKeyClient = ZnVaultClient.builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(TestConfig.BASE_URL)
         .apiKey(originalKey.key)
         .rejectUnauthorized(false)
         .build();
@@ -144,26 +130,22 @@ describe('AuthClient', () => {
       // Self-rotate the key (self endpoints don't require special permissions)
       const rotatedKey = await apiKeyClient.auth.rotateCurrentApiKey();
 
+      createdKeyIds.push(rotatedKey.apiKey.id);
+
       expect(rotatedKey.key).toBeDefined();
       expect(rotatedKey.key).not.toBe(originalKey.key);
       expect(rotatedKey.apiKey.name).toBe(originalKey.apiKey.name);
-
-      // Cleanup - delete the new key using the original client
-      await client.auth.deleteApiKey(rotatedKey.apiKey.id);
     });
 
     it('should delete an API key', async () => {
-      await client.auth.login({ username: ADMIN_USER, password: ADMIN_PASS });
-
       // Create a key to delete
       const keyResponse = await client.auth.createApiKey({
         name: `delete-test-${Date.now()}`,
         permissions: ['secret:read:metadata'],
         expiresInDays: 1,
-        tenantId: TENANT_ID,
       });
 
-      // Delete it
+      // Delete it (don't add to cleanup list since we're testing delete)
       await expect(client.auth.deleteApiKey(keyResponse.apiKey.id)).resolves.toBeUndefined();
     });
   });
