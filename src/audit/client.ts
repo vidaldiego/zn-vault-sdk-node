@@ -20,7 +20,6 @@ export class AuditClient {
 
   async list(filter?: AuditFilter): Promise<PaginatedResponse<AuditEntry>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.userId) params.set('userId', filter.userId);
     if (filter?.action) params.set('action', filter.action);
     if (filter?.resourceType) params.set('resourceType', filter.resourceType);
@@ -44,7 +43,6 @@ export class AuditClient {
 
   async exportLogs(filter?: AuditFilter): Promise<AuditEntry[]> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.userId) params.set('userId', filter.userId);
     if (filter?.action) params.set('action', filter.action);
     if (filter?.resourceType) params.set('resourceType', filter.resourceType);

@@ -25,8 +25,6 @@ export type TokenRefreshCallback = () => Promise<string>;
 interface ManagedKeyState {
   /** The managed key name */
   name: string;
-  /** Tenant ID for cross-tenant access */
-  tenantId?: string;
   /** Current key value */
   currentKey: string;
   /** When the next rotation will occur */
@@ -168,15 +166,11 @@ export class HttpClient {
     this.apiKey = initialKey;
 
     // Bind to get current key and rotation metadata
-    const bindResponse = await this.bindManagedKeyInternal(
-      effectiveConfig.name,
-      effectiveConfig.tenantId
-    );
+    const bindResponse = await this.bindManagedKeyInternal(effectiveConfig.name);
 
     // Initialize state
     this.managedKeyState = {
       name: effectiveConfig.name,
-      tenantId: effectiveConfig.tenantId,
       currentKey: bindResponse.key,
       nextRotationAt: bindResponse.nextRotationAt ? new Date(bindResponse.nextRotationAt) : undefined,
       graceExpiresAt: bindResponse.graceExpiresAt ? new Date(bindResponse.graceExpiresAt) : undefined,
@@ -267,14 +261,10 @@ export class HttpClient {
   /**
    * Internal: bind to managed key endpoint
    */
-  private async bindManagedKeyInternal(name: string, tenantId?: string): Promise<ManagedKeyBindResponse> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
+  private async bindManagedKeyInternal(name: string): Promise<ManagedKeyBindResponse> {
     return this.request<ManagedKeyBindResponse>({
       method: 'POST',
-      path: `/auth/api-keys/managed/${encodeURIComponent(name)}/bind${query ? `?${query}` : ''}`,
+      path: `/auth/api-keys/managed/${encodeURIComponent(name)}/bind`,
       body: {},
     });
   }
@@ -355,10 +345,7 @@ export class HttpClient {
 
     try {
       // Bind to get new key
-      const bindResponse = await this.bindManagedKeyInternal(
-        this.managedKeyState.name,
-        this.managedKeyState.tenantId
-      );
+      const bindResponse = await this.bindManagedKeyInternal(this.managedKeyState.name);
 
       // Update state
       const newKey = bindResponse.key;

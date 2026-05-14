@@ -18,7 +18,6 @@ export class RolesClient {
       name: request.name,
       description: request.description,
       permissions: request.permissions,
-      tenantId: request.tenantId,
     });
   }
 
@@ -40,7 +39,6 @@ export class RolesClient {
 
   async list(filter?: RoleFilter): Promise<PaginatedResponse<Role>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.includeSystem !== undefined) {
       params.set('includeSystem', filter.includeSystem.toString());
     }

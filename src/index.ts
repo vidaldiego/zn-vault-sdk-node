@@ -7,7 +7,6 @@ import { KmsClient } from './kms/client.js';
 import { CertificatesClient } from './certificates/client.js';
 import { UsersClient } from './admin/users.js';
 import { RolesClient } from './admin/roles.js';
-import { TenantsClient } from './admin/tenants.js';
 import { PoliciesClient } from './admin/policies.js';
 import { AuditClient } from './audit/client.js';
 import { HealthClient } from './health/client.js';
@@ -52,7 +51,6 @@ export class ZnVaultClient {
   private _certificates: CertificatesClient;
   private _users: UsersClient;
   private _roles: RolesClient;
-  private _tenants: TenantsClient;
   private _policies: PoliciesClient;
   private _audit: AuditClient;
   private _health: HealthClient;
@@ -85,7 +83,6 @@ export class ZnVaultClient {
     this._certificates = new CertificatesClient(this.httpClient);
     this._users = new UsersClient(this.httpClient);
     this._roles = new RolesClient(this.httpClient);
-    this._tenants = new TenantsClient(this.httpClient);
     this._policies = new PoliciesClient(this.httpClient);
     this._audit = new AuditClient(this.httpClient);
     this._health = new HealthClient(this.httpClient);
@@ -129,11 +126,6 @@ export class ZnVaultClient {
   /** Role management (admin) */
   get roles(): RolesClient {
     return this._roles;
-  }
-
-  /** Tenant management (admin) */
-  get tenants(): TenantsClient {
-    return this._tenants;
   }
 
   /** Policy management (admin) */
@@ -477,7 +469,11 @@ export { AuthClient } from './auth/index.js';
 export { SecretsClient } from './secrets/index.js';
 export { KmsClient } from './kms/index.js';
 export { CertificatesClient } from './certificates/index.js';
-export { UsersClient, RolesClient, TenantsClient, PoliciesClient } from './admin/index.js';
+export { UsersClient, RolesClient, PoliciesClient } from './admin/index.js';
+// TenantsClient is now part of ZnVaultSuperadminClient (tenant CRUD is superadmin-only).
+export { ZnVaultSuperadminClient, SuperadminAuthClient } from './superadmin/index.js';
+export type { ZnVaultSuperadminConfig } from './superadmin/index.js';
+export { TenantsClient } from './admin/tenants.js';
 export { AuditClient, type AuditVerifyResult } from './audit/index.js';
 export { HealthClient, type HealthStatus, type ReadinessStatus } from './health/index.js';
 

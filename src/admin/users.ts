@@ -18,7 +18,6 @@ export class UsersClient {
       password: request.password,
       email: request.email,
       role: request.role,
-      tenantId: request.tenantId,
       roles: request.roles,
     });
   }
@@ -31,7 +30,6 @@ export class UsersClient {
     return this.http.put<User>(`/v1/users/${id}`, {
       email: request.email,
       role: request.role,
-      tenantId: request.tenantId,
       status: request.status,
       roles: request.roles,
     });
@@ -43,7 +41,6 @@ export class UsersClient {
 
   async list(filter?: UserFilter): Promise<PaginatedResponse<User>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.role) params.set('role', filter.role);
     if (filter?.status) params.set('status', filter.status);
     if (filter?.limit) params.set('limit', filter.limit.toString());

@@ -21,7 +21,6 @@ export class PoliciesClient {
       resources: request.resources,
       conditions: request.conditions,
       priority: request.priority,
-      tenantId: request.tenantId,
     });
   }
 
@@ -47,7 +46,6 @@ export class PoliciesClient {
 
   async list(filter?: PolicyFilter): Promise<PaginatedResponse<Policy>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.enabled !== undefined) params.set('enabled', filter.enabled.toString());
     if (filter?.limit) params.set('limit', filter.limit.toString());
     if (filter?.offset) params.set('offset', filter.offset.toString());
@@ -69,7 +67,7 @@ export class PoliciesClient {
     return this.toggle(id, false);
   }
 
-  async validate(policy: Omit<CreatePolicyRequest, 'tenantId'>): Promise<{ valid: boolean; errors?: string[] }> {
+  async validate(policy: CreatePolicyRequest): Promise<{ valid: boolean; errors?: string[] }> {
     return this.http.post('/v1/policies/validate', policy);
   }
 

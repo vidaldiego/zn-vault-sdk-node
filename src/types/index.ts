@@ -121,8 +121,6 @@ export interface CreateApiKeyRequest {
   ipAllowlist?: string[];
   /** Inline ABAC conditions for fine-grained access control */
   conditions?: ApiKeyConditions;
-  /** Target tenant ID (required for superadmin, optional for tenant users) */
-  tenantId?: string;
 }
 
 /**
@@ -221,8 +219,6 @@ export interface CreateManagedApiKeyRequest {
   description?: string;
   /** Expiration in days (optional) */
   expiresInDays?: number;
-  /** Target tenant ID (required for superadmin) */
-  tenantId?: string;
 }
 
 /**
@@ -292,8 +288,6 @@ export interface UpdateManagedApiKeyConfigRequest {
 export interface ManagedKeyConfig {
   /** The managed key name to bind to */
   name: string;
-  /** Tenant ID (required for cross-tenant access) */
-  tenantId?: string;
   /** How early before expiration to refresh (default: 30 seconds) */
   refreshBeforeExpiryMs?: number;
   /** Callback when key is rotated */
@@ -429,20 +423,17 @@ export interface CreateUserRequest {
   password: string;
   email?: string;
   role?: UserRole;
-  tenantId?: string;
   roles?: string[];
 }
 
 export interface UpdateUserRequest {
   email?: string;
   role?: UserRole;
-  tenantId?: string;
   status?: UserStatus;
   roles?: string[];
 }
 
 export interface UserFilter {
-  tenantId?: string;
   role?: UserRole;
   status?: UserStatus;
   limit?: number;
@@ -566,8 +557,6 @@ export interface SecretFilter {
   aliasPrefix?: string;
   limit?: number;
   offset?: number;
-  /** Tenant ID (required for superadmin, optional for tenant-scoped users) */
-  tenantId?: string;
 }
 
 /**
@@ -703,7 +692,6 @@ export interface CreateKeyRequest {
   description?: string;
   usage?: KeyUsage;
   keySpec?: KeySpec;
-  tenantId?: string;
   rotationEnabled?: boolean;
   rotationPeriodDays?: number;
 }
@@ -744,7 +732,6 @@ export interface GenerateDataKeyResponse {
 }
 
 export interface KeyFilter {
-  tenantId?: string;
   state?: KeyState;
   limit?: number;
   offset?: number;
@@ -829,7 +816,6 @@ export interface CreateRoleRequest {
   name: string;
   description?: string;
   permissions: string[];
-  tenantId?: string;
 }
 
 export interface UpdateRoleRequest {
@@ -839,7 +825,6 @@ export interface UpdateRoleRequest {
 }
 
 export interface RoleFilter {
-  tenantId?: string;
   includeSystem?: boolean;
   limit?: number;
   offset?: number;
@@ -879,7 +864,6 @@ export interface CreatePolicyRequest {
   resources: string[];
   conditions?: Record<string, unknown>;
   priority?: number;
-  tenantId?: string;
 }
 
 export interface UpdatePolicyRequest {
@@ -893,7 +877,6 @@ export interface UpdatePolicyRequest {
 }
 
 export interface PolicyFilter {
-  tenantId?: string;
   enabled?: boolean;
   limit?: number;
   offset?: number;
@@ -925,7 +908,6 @@ export interface AuditFilter {
   endDate?: string;
   action?: string;
   userId?: string;
-  tenantId?: string;
   resourceType?: string;
   success?: boolean;
   limit?: number;

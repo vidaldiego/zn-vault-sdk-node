@@ -138,20 +138,16 @@ export class AuthClient {
   // API Keys
 
   /**
-   * Create an API key for programmatic access.
+   * Create an API key for programmatic access in the caller's tenant.
+   * Tenant is derived server-side from the authenticated principal. For
+   * cross-tenant API key creation, use ZnVaultSuperadminClient (when
+   * available — /v1/superadmin/api-keys/* is not yet implemented on the
+   * server as of vault 1.38.8).
    *
-   * API keys are independent (not bound to any user) and managed at the tenant level.
    * The key value is only shown once - save it immediately!
-   *
-   * @param request - API key creation parameters
-   * @returns The created API key with the full key value
    */
   async createApiKey(request: CreateApiKeyRequest): Promise<CreateApiKeyResponse> {
-    const path = request.tenantId
-      ? `/auth/api-keys?tenantId=${encodeURIComponent(request.tenantId)}`
-      : '/auth/api-keys';
-
-    return this.http.post<CreateApiKeyResponse>(path, {
+    return this.http.post<CreateApiKeyResponse>('/auth/api-keys', {
       name: request.name,
       permissions: request.permissions,
       description: request.description,
@@ -251,69 +247,38 @@ export class AuthClient {
   // =========================================================================
   // Managed API Keys
   // =========================================================================
+  //
+  // All managed-key and registration-token methods are scoped to the
+  // caller's tenant. For cross-tenant management, use ZnVaultSuperadminClient
+  // (server route /v1/superadmin/api-keys/* — not yet implemented).
 
   /**
-   * Create a managed API key with auto-rotation configuration.
-   *
-   * Managed keys automatically rotate based on the configured mode:
-   * - `scheduled`: Rotates at fixed intervals (e.g., every 24 hours)
-   * - `on-use`: Rotates after being used (TTL resets on each use)
-   * - `on-bind`: Rotates each time bind is called
-   *
-   * @param request - Managed key creation parameters
-   * @returns The created managed key metadata (no key value - use bind to get it)
+   * Create a managed API key with auto-rotation configuration in the
+   * caller's tenant.
    */
   async createManagedApiKey(request: CreateManagedApiKeyRequest): Promise<CreateManagedApiKeyResponse> {
-    const params = new URLSearchParams();
-    if (request.tenantId) params.append('tenantId', request.tenantId);
-    const query = params.toString();
-
-    return this.http.post<CreateManagedApiKeyResponse>(
-      `/auth/api-keys/managed${query ? `?${query}` : ''}`,
-      {
-        name: request.name,
-        permissions: request.permissions,
-        rotationMode: request.rotationMode,
-        rotationInterval: request.rotationInterval,
-        gracePeriod: request.gracePeriod,
-        description: request.description,
-        expiresInDays: request.expiresInDays,
-      }
-    );
+    return this.http.post<CreateManagedApiKeyResponse>('/auth/api-keys/managed', {
+      name: request.name,
+      permissions: request.permissions,
+      rotationMode: request.rotationMode,
+      rotationInterval: request.rotationInterval,
+      gracePeriod: request.gracePeriod,
+      description: request.description,
+      expiresInDays: request.expiresInDays,
+    });
   }
 
-  /**
-   * List managed API keys.
-   *
-   * @param tenantId - Optional tenant ID filter (for superadmin)
-   * @returns List of managed keys
-   */
-  async listManagedApiKeys(tenantId?: string): Promise<{ keys: ManagedApiKey[]; total: number }> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
+  /** List managed API keys in the caller's tenant. */
+  async listManagedApiKeys(): Promise<{ keys: ManagedApiKey[]; total: number }> {
     const response = await this.http.get<{ items: ManagedApiKey[]; pagination: { total: number } }>(
-      `/auth/api-keys/managed${query ? `?${query}` : ''}`
+      '/auth/api-keys/managed'
     );
     return { keys: response.items, total: response.pagination.total };
   }
 
-  /**
-   * Get a managed API key by name.
-   *
-   * @param name - The managed key name
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   * @returns The managed key metadata
-   */
-  async getManagedApiKey(name: string, tenantId?: string): Promise<ManagedApiKey> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
-    return this.http.get<ManagedApiKey>(
-      `/auth/api-keys/managed/${encodeURIComponent(name)}${query ? `?${query}` : ''}`
-    );
+  /** Get a managed API key by name in the caller's tenant. */
+  async getManagedApiKey(name: string): Promise<ManagedApiKey> {
+    return this.http.get<ManagedApiKey>(`/auth/api-keys/managed/${encodeURIComponent(name)}`);
   }
 
   /**
@@ -326,18 +291,10 @@ export class AuthClient {
    * Security: This endpoint requires the caller to already have a valid
    * API key (the current one, even during grace period). This prevents
    * unauthorized access to managed keys.
-   *
-   * @param name - The managed key name
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   * @returns The current key value and rotation metadata
    */
-  async bindManagedApiKey(name: string, tenantId?: string): Promise<ManagedKeyBindResponse> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
+  async bindManagedApiKey(name: string): Promise<ManagedKeyBindResponse> {
     return this.http.post<ManagedKeyBindResponse>(
-      `/auth/api-keys/managed/${encodeURIComponent(name)}/bind${query ? `?${query}` : ''}`,
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/bind`,
       {}
     );
   }
@@ -347,59 +304,28 @@ export class AuthClient {
    *
    * Creates a new key immediately, regardless of the rotation schedule.
    * The old key remains valid during the grace period.
-   *
-   * @param name - The managed key name
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   * @returns The new key value and rotation info
    */
-  async rotateManagedApiKey(name: string, tenantId?: string): Promise<ManagedKeyRotateResponse> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
+  async rotateManagedApiKey(name: string): Promise<ManagedKeyRotateResponse> {
     return this.http.post<ManagedKeyRotateResponse>(
-      `/auth/api-keys/managed/${encodeURIComponent(name)}/rotate${query ? `?${query}` : ''}`,
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/rotate`,
       {}
     );
   }
 
-  /**
-   * Update managed API key configuration.
-   *
-   * @param name - The managed key name
-   * @param config - Configuration updates
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   * @returns Updated managed key metadata
-   */
+  /** Update managed API key configuration. */
   async updateManagedApiKeyConfig(
     name: string,
-    config: UpdateManagedApiKeyConfigRequest,
-    tenantId?: string
+    config: UpdateManagedApiKeyConfigRequest
   ): Promise<ManagedApiKey> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
     return this.http.patch<ManagedApiKey>(
-      `/auth/api-keys/managed/${encodeURIComponent(name)}/config${query ? `?${query}` : ''}`,
+      `/auth/api-keys/managed/${encodeURIComponent(name)}/config`,
       config
     );
   }
 
-  /**
-   * Delete a managed API key.
-   *
-   * @param name - The managed key name
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   */
-  async deleteManagedApiKey(name: string, tenantId?: string): Promise<void> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
-    await this.http.delete(
-      `/auth/api-keys/managed/${encodeURIComponent(name)}${query ? `?${query}` : ''}`
-    );
+  /** Delete a managed API key. */
+  async deleteManagedApiKey(name: string): Promise<void> {
+    await this.http.delete(`/auth/api-keys/managed/${encodeURIComponent(name)}`);
   }
 
   // =========================================================================
@@ -411,71 +337,33 @@ export class AuthClient {
    *
    * Registration tokens are one-time use tokens that allow agents to
    * obtain their managed API key without prior authentication.
-   *
-   * @param managedKeyName - The managed key to create a token for
-   * @param request - Token creation parameters
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   * @returns The created token (shown only once!)
    */
   async createRegistrationToken(
     managedKeyName: string,
-    request: CreateRegistrationTokenRequest = {},
-    tenantId?: string
+    request: CreateRegistrationTokenRequest = {}
   ): Promise<CreateRegistrationTokenResponse> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
     return this.http.post<CreateRegistrationTokenResponse>(
-      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens${query ? `?${query}` : ''}`,
+      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens`,
       request
     );
   }
 
-  /**
-   * List registration tokens for a managed key.
-   *
-   * @param managedKeyName - The managed key name
-   * @param options - Optional filters
-   * @param options.includeUsed - Include tokens that have been used
-   * @param options.tenantId - Tenant ID (for cross-tenant access)
-   * @returns List of registration tokens
-   */
+  /** List registration tokens for a managed key. */
   async listRegistrationTokens(
     managedKeyName: string,
-    options?: { includeUsed?: boolean; tenantId?: string }
+    options?: { includeUsed?: boolean }
   ): Promise<RegistrationToken[]> {
-    const params = new URLSearchParams();
-    if (options?.includeUsed) params.append('includeUsed', 'true');
-    if (options?.tenantId) params.append('tenantId', options.tenantId);
-    const query = params.toString();
-
-    const response = await this.http.get<ListRegistrationTokensResponse>(
-      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens${query ? `?${query}` : ''}`
-    );
+    const path = options?.includeUsed
+      ? `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens?includeUsed=true`
+      : `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens`;
+    const response = await this.http.get<ListRegistrationTokensResponse>(path);
     return response.tokens;
   }
 
-  /**
-   * Revoke a registration token.
-   *
-   * Prevents the token from being used for bootstrapping.
-   *
-   * @param managedKeyName - The managed key name
-   * @param tokenId - The token ID to revoke
-   * @param tenantId - Optional tenant ID (for cross-tenant access)
-   */
-  async revokeRegistrationToken(
-    managedKeyName: string,
-    tokenId: string,
-    tenantId?: string
-  ): Promise<void> {
-    const params = new URLSearchParams();
-    if (tenantId) params.append('tenantId', tenantId);
-    const query = params.toString();
-
+  /** Revoke a registration token. */
+  async revokeRegistrationToken(managedKeyName: string, tokenId: string): Promise<void> {
     await this.http.delete(
-      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens/${tokenId}${query ? `?${query}` : ''}`
+      `/auth/api-keys/managed/${encodeURIComponent(managedKeyName)}/registration-tokens/${tokenId}`
     );
   }
 

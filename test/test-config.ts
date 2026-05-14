@@ -85,9 +85,11 @@ export const TestConfig = {
       return process.env.ZNVAULT_CERT_USER_PASSWORD ?? STANDARD_PASSWORD;
     },
 
-    // Second tenant admin (for isolation testing)
+    // Second tenant admin (for isolation testing). Username is sdk-admin2
+    // because the server's superadmin user-create requires globally-unique
+    // usernames; sdk-admin is taken by the first tenant.
     get TENANT2_ADMIN_USERNAME(): string {
-      return process.env.ZNVAULT_TENANT2_ADMIN_USERNAME ?? `${TestConfig.TENANT_2}/sdk-admin`;
+      return process.env.ZNVAULT_TENANT2_ADMIN_USERNAME ?? `${TestConfig.TENANT_2}/sdk-admin2`;
     },
     get TENANT2_ADMIN_PASSWORD(): string {
       return process.env.ZNVAULT_TENANT2_ADMIN_PASSWORD ?? STANDARD_PASSWORD;

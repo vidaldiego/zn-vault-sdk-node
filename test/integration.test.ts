@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import type { SecretType } from '../src/index.js';
-import { ZnVaultClient } from '../src/index.js';
+import { ZnVaultClient, ZnVaultSuperadminClient } from '../src/index.js';
 import { TestConfig } from './test-config.js';
 
 /**
@@ -266,8 +266,8 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
         createdSecretIds.push(secret.id);
       }
 
-      // List secrets
-      const response = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
+      // List secrets (server scopes to caller's tenant automatically)
+      const response = await client.secrets.list({});
 
       expect(response.items.length).toBeGreaterThanOrEqual(3);
       console.log(`✓ Listed ${response.items.length} secrets`);
@@ -363,25 +363,35 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
   // ===================
   // Tenant Management Tests
   // ===================
-  // Note: Tenant operations require superadmin via /v1/superadmin/* routes
-  // SDK currently uses /v1/* routes, so these tests use tenant admin for basic read
+  // Tenant CRUD is superadmin-only; live on ZnVaultSuperadminClient now.
   describe('Tenant Management', () => {
-    let client: ZnVaultClient;
+    let admin: ZnVaultSuperadminClient;
 
     beforeAll(async () => {
-      // Use tenant admin - can read their own tenant info
-      client = await TestConfig.createTenantAdminClient();
+      admin = new ZnVaultSuperadminClient({
+        baseUrl: TestConfig.BASE_URL,
+        rejectUnauthorized: false,
+      });
+      const tenantClient = ZnVaultClient.builder()
+        .baseUrl(TestConfig.BASE_URL)
+        .rejectUnauthorized(false)
+        .build();
+      const login = await tenantClient.login(
+        TestConfig.Users.SUPERADMIN_USERNAME,
+        TestConfig.Users.SUPERADMIN_PASSWORD
+      );
+      admin.setTokens(login.accessToken, login.refreshToken);
     });
 
     it('should list tenants', async () => {
-      const response = await client.tenants.list();
+      const response = await admin.tenants.list();
       expect(response).toBeDefined();
       expect(response.items).toBeDefined();
       console.log(`✓ Listed ${response.items.length} tenants`);
     });
 
     it('should get tenant by ID', async () => {
-      const tenant = await client.tenants.get(TestConfig.DEFAULT_TENANT);
+      const tenant = await admin.tenants.get(TestConfig.DEFAULT_TENANT);
       expect(tenant.id).toBe(TestConfig.DEFAULT_TENANT);
       console.log(`✓ Retrieved tenant: ${tenant.id}`);
     });

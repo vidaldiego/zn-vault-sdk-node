@@ -610,7 +610,7 @@ describe('fromEnv Feature', () => {
         .build();
 
       // Verify initial connection works with an authenticated endpoint
-      const secrets = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
+      const secrets = await client.secrets.list({});
       expect(secrets).toBeDefined();
       expect(Array.isArray(secrets.items)).toBe(true);
       console.log('✓ Initial connection successful with key1');
@@ -627,7 +627,7 @@ describe('fromEnv Feature', () => {
       // 1. Try with key1 -> get 401
       // 2. FileApiKeyAuth.onAuthenticationError() re-reads file -> finds key2
       // 3. Retry with key2 -> succeeds
-      const secrets2 = await client.secrets.list({ tenantId: TestConfig.DEFAULT_TENANT });
+      const secrets2 = await client.secrets.list({});
       expect(secrets2).toBeDefined();
       expect(Array.isArray(secrets2.items)).toBe(true);
 

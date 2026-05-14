@@ -82,7 +82,6 @@ export class SecretsClient {
 
   async list(filter?: SecretFilter): Promise<PaginatedResponse<Secret>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.type) params.set('type', filter.type);
     if (filter?.subType) params.set('subType', filter.subType);
     if (filter?.fileMime) params.set('fileMime', filter.fileMime);

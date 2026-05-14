@@ -23,7 +23,6 @@ export class KmsClient {
       description: request.description,
       usage: request.usage ?? 'ENCRYPT_DECRYPT',
       keySpec: request.keySpec ?? 'AES_256',
-      tenantId: request.tenantId,
       rotationEnabled: request.rotationEnabled,
       rotationPeriodDays: request.rotationPeriodDays,
     });
@@ -39,7 +38,6 @@ export class KmsClient {
 
   async listKeys(filter?: KeyFilter): Promise<PaginatedResponse<KmsKey>> {
     const params = new URLSearchParams();
-    if (filter?.tenantId) params.set('tenantId', filter.tenantId);
     if (filter?.state) params.set('state', filter.state);
     if (filter?.limit) params.set('limit', filter.limit.toString());
     if (filter?.offset) params.set('offset', filter.offset.toString());
