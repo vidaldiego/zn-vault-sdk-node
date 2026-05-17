@@ -524,8 +524,6 @@ export interface CreateSecretRequest {
   tags?: string[];
   /** MIME type for settings/files */
   contentType?: string;
-  /** Tenant ID (required for superadmin, optional for tenant-scoped users) */
-  tenant?: string;
 }
 
 /**
@@ -603,8 +601,6 @@ export interface GenerateKeypairRequest {
   algorithm: KeypairAlgorithm;
   /** Alias for the private key (e.g., "keys/prod/api-private") */
   alias: string;
-  /** Tenant ID */
-  tenant: string;
   /** RSA key size (only for RSA) */
   rsaBits?: RsaBits;
   /** ECDSA curve (only for ECDSA) */

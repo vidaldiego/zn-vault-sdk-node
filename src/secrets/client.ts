@@ -32,7 +32,6 @@ export class SecretsClient {
       ttlUntil: request.ttlUntil,
       tags: request.tags,
       contentType: request.contentType,
-      tenant: request.tenant,
     });
   }
 
@@ -506,7 +505,6 @@ export class SecretsClient {
    * const keypair = await client.secrets.generateKeypair({
    *   algorithm: 'Ed25519',
    *   alias: 'keys/prod/api-signing',
-   *   tenant: 'acme',
    *   publishPublicKey: true,
    *   tags: ['signing', 'api']
    * });
@@ -515,7 +513,6 @@ export class SecretsClient {
    * const rsaKeypair = await client.secrets.generateKeypair({
    *   algorithm: 'RSA',
    *   alias: 'keys/prod/ssh-key',
-   *   tenant: 'acme',
    *   rsaBits: 4096,
    *   comment: 'Production SSH key'
    * });
@@ -525,7 +522,6 @@ export class SecretsClient {
     return this.http.post<GeneratedKeypair>('/v1/secrets/generate-keypair', {
       algorithm: request.algorithm,
       alias: request.alias,
-      tenant: request.tenant,
       rsaBits: request.rsaBits,
       ecdsaCurve: request.ecdsaCurve,
       comment: request.comment,
