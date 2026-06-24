@@ -4,6 +4,7 @@ import https from 'node:https';
 import type { ZnVaultErrorResponse, ManagedKeyBindResponse, ManagedKeyConfig } from '../types/index.js';
 import type { AuthProvider } from '../auth/provider.js';
 import { isRefreshableAuthProvider } from '../auth/provider.js';
+import { accumulate } from './body.js';
 
 export interface HttpClientConfig {
   baseUrl: string;
@@ -96,6 +97,7 @@ interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   timeout?: number;
+  responseType?: 'json' | 'text' | 'buffer';
 }
 
 export class HttpClient {
@@ -469,41 +471,37 @@ export class HttpClient {
       };
 
       const req = https.request(requestOptions, (res) => {
-        let data = '';
-
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => { chunks.push(chunk); });
         res.on('end', () => {
           const statusCode = res.statusCode ?? 500;
+          const bodyBuffer = accumulate(chunks);
 
           if (statusCode >= 200 && statusCode < 300) {
-            if (!data) {
-              resolve(undefined as T);
+            if (options.responseType === 'buffer') {
+              resolve(bodyBuffer as unknown as T);
               return;
             }
+            const text = bodyBuffer.toString('utf8');
+            if (!text) { resolve(undefined as T); return; }
+            if (options.responseType === 'text') { resolve(text as unknown as T); return; }
             try {
-              resolve(JSON.parse(data) as T);
+              resolve(JSON.parse(text) as T);
             } catch {
-              resolve(data as T);
+              // Declared-text endpoints fall back to raw string; for JSON endpoints a
+              // non-JSON 2xx body is a contract violation — surface it as an error.
+              reject(new ZnVaultError('Expected JSON response but received non-JSON body', statusCode, 'INVALID_RESPONSE'));
             }
             return;
           }
 
           let errorResponse: ZnVaultErrorResponse;
           try {
-            errorResponse = JSON.parse(data) as ZnVaultErrorResponse;
+            errorResponse = JSON.parse(bodyBuffer.toString('utf8')) as ZnVaultErrorResponse;
           } catch {
-            errorResponse = {
-              error: 'Unknown Error',
-              message: data || 'Request failed',
-              statusCode,
-            };
+            errorResponse = { error: 'Unknown Error', message: bodyBuffer.toString('utf8') || 'Request failed', statusCode };
           }
-
-          const error = this.createError(statusCode, errorResponse, res.headers);
-          reject(error);
+          reject(this.createError(statusCode, errorResponse, res.headers));
         });
       });
 
@@ -557,23 +555,23 @@ export class HttpClient {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async get<T>(path: string, headers?: Record<string, string>): Promise<T> {
-    return this.request<T>({ method: 'GET', path, headers });
+  async get<T>(path: string, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
+    return this.request<T>({ method: 'GET', path, headers: opts?.headers, responseType: opts?.responseType });
   }
 
-  async post<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
-    return this.request<T>({ method: 'POST', path, body, headers });
+  async post<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
+    return this.request<T>({ method: 'POST', path, body, headers: opts?.headers, responseType: opts?.responseType });
   }
 
-  async put<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
-    return this.request<T>({ method: 'PUT', path, body, headers });
+  async put<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
+    return this.request<T>({ method: 'PUT', path, body, headers: opts?.headers, responseType: opts?.responseType });
   }
 
-  async patch<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
-    return this.request<T>({ method: 'PATCH', path, body, headers });
+  async patch<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
+    return this.request<T>({ method: 'PATCH', path, body, headers: opts?.headers, responseType: opts?.responseType });
   }
 
-  async delete<T>(path: string, headers?: Record<string, string>): Promise<T> {
-    return this.request<T>({ method: 'DELETE', path, headers });
+  async delete<T>(path: string, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
+    return this.request<T>({ method: 'DELETE', path, headers: opts?.headers, responseType: opts?.responseType });
   }
 }

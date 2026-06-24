@@ -106,10 +106,10 @@ export class SSHCAClient {
    * `RevokedKeys` file. Returns the raw KRL bytes.
    */
   async getKrl(tenant: string): Promise<Buffer> {
-    const data = await this.http.get<string | Buffer>(
-      `/v1/ssh/ca/${encodeURIComponent(tenant)}/krl`
+    return this.http.get<Buffer>(
+      `/v1/ssh/ca/${encodeURIComponent(tenant)}/krl`,
+      { responseType: 'buffer' }
     );
-    return Buffer.isBuffer(data) ? data : Buffer.from(data ?? '', 'binary');
   }
 
   // ==========================================================================
