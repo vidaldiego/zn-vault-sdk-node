@@ -31,4 +31,26 @@ describe('KmsClient crypto (mocked HTTP)', () => {
     const out = await client.encryptString('k1', 'hello');
     expect(out).toBe('CTBLOB');
   });
+
+  it('reEncrypt sends ciphertext/sourceKeyId/sourceContext/destinationKeyId/destinationContext (not ciphertextBlob/keyId) and reads response.ciphertext', async () => {
+    const mockResponse = { sourceKeyId: 'src-key', destinationKeyId: 'dst-key', ciphertext: 'NEWCT' };
+    http.post.mockResolvedValue(mockResponse);
+    const res = await client.reEncrypt({
+      ciphertext: 'OLDCT',
+      sourceKeyId: 'src-key',
+      sourceContext: { env: 'prod' },
+      destinationKeyId: 'dst-key',
+      destinationContext: { env: 'staging' },
+    });
+    expect(http.post).toHaveBeenCalledWith('/v1/kms/re-encrypt', {
+      ciphertext: 'OLDCT',
+      sourceKeyId: 'src-key',
+      sourceContext: { env: 'prod' },
+      destinationKeyId: 'dst-key',
+      destinationContext: { env: 'staging' },
+    });
+    expect(res.ciphertext).toBe('NEWCT');
+    expect(res.sourceKeyId).toBe('src-key');
+    expect(res.destinationKeyId).toBe('dst-key');
+  });
 });
