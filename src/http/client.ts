@@ -508,31 +508,68 @@ export class HttpClient {
         port: url.port || 443,
         path: url.pathname + url.search,
         headers,
+        // Socket-idle timeout (inactivity). Complementary to the overall deadline below.
         timeout: options.timeout ?? this.timeout,
         rejectUnauthorized: this.rejectUnauthorized,
       };
 
+      // Guard: ensure resolve/reject are called at most once across all handlers,
+      // and that the overall deadline timer is always cleared on settlement.
+      let settled = false;
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+
+      const settle = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        fn();
+      };
+
+      // Overall wall-clock deadline: fires regardless of socket activity.
+      // The socket-idle `req.on('timeout')` below is complementary (catches idle
+      // sockets) but a server that trickles bytes slowly would never trip it.
+      const timeoutMs = options.timeout ?? this.timeout;
+      deadline = setTimeout(() => {
+        req.destroy();
+        settle(() => reject(new ZnVaultError('Request exceeded deadline', 0, 'TIMEOUT')));
+      }, timeoutMs);
+
       const req = https.request(requestOptions, (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => { chunks.push(chunk); });
+
+        // Covers mid-body connection drops (HTTP/1.1; Node ≥ v16 emits 'close'
+        // with res.complete===false for the same case, handled below).
+        res.on('aborted', () => {
+          settle(() => reject(new ZnVaultError('Response aborted', 0, 'ABORTED')));
+        });
+
+        // Covers cases where the connection closes before the response body
+        // is fully received (res.complete is false when the body was truncated).
+        res.on('close', () => {
+          if (!res.complete) {
+            settle(() => reject(new ZnVaultError('Response aborted', 0, 'ABORTED')));
+          }
+        });
+
         res.on('end', () => {
           const statusCode = res.statusCode ?? 500;
           const bodyBuffer = accumulate(chunks);
 
           if (statusCode >= 200 && statusCode < 300) {
             if (options.responseType === 'buffer') {
-              resolve(bodyBuffer as unknown as T);
+              settle(() => resolve(bodyBuffer as unknown as T));
               return;
             }
             const text = bodyBuffer.toString('utf8');
-            if (!text) { resolve(undefined as T); return; }
-            if (options.responseType === 'text') { resolve(text as unknown as T); return; }
+            if (!text) { settle(() => resolve(undefined as T)); return; }
+            if (options.responseType === 'text') { settle(() => resolve(text as unknown as T)); return; }
             try {
-              resolve(JSON.parse(text) as T);
+              settle(() => resolve(JSON.parse(text) as T));
             } catch {
               // Declared-text endpoints fall back to raw string; for JSON endpoints a
               // non-JSON 2xx body is a contract violation — surface it as an error.
-              reject(new ZnVaultError('Expected JSON response but received non-JSON body', statusCode, 'INVALID_RESPONSE'));
+              settle(() => reject(new ZnVaultError('Expected JSON response but received non-JSON body', statusCode, 'INVALID_RESPONSE')));
             }
             return;
           }
@@ -544,17 +581,18 @@ export class HttpClient {
           } catch {
             errorResponse = { error: 'Unknown Error', message: bodyText || 'Request failed', statusCode };
           }
-          reject(this.createError(statusCode, errorResponse, res.headers));
+          settle(() => reject(this.createError(statusCode, errorResponse, res.headers)));
         });
       });
 
       req.on('error', (error) => {
-        reject(new ZnVaultError(`Connection error: ${error.message}`, 0, 'CONNECTION_ERROR'));
+        settle(() => reject(new ZnVaultError(`Connection error: ${error.message}`, 0, 'CONNECTION_ERROR')));
       });
 
+      // Socket-idle timeout (inactivity). Complements the overall deadline above.
       req.on('timeout', () => {
         req.destroy();
-        reject(new ZnVaultError('Request timeout', 0, 'TIMEOUT'));
+        settle(() => reject(new ZnVaultError('Request timeout', 0, 'TIMEOUT')));
       });
 
       if (options.body) {

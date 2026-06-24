@@ -1,6 +1,8 @@
 // Path: zn-vault-sdk-node/test/http-client.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Buffer } from 'node:buffer';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
 
 // We test the chunk-accumulation logic in isolation by extracting it.
 // The bug: `let data=''; data += chunk` decodes each Buffer chunk as UTF-8,
@@ -311,6 +313,107 @@ describe('MANAGEDKEY-02b: chain-reschedule guard prevents premature refresh', ()
 
     // bindManagedKeyInternal must NOT have been called — no premature refresh
     expect(bindSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TIMEOUT-01: Overall request deadline — wall-clock cap, not just idle-socket
+// ---------------------------------------------------------------------------
+
+describe('TIMEOUT-01: overall request deadline rejects with TIMEOUT', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('rejects with errorCode TIMEOUT when server never responds within timeout', async () => {
+    vi.useFakeTimers();
+
+    // Build a fake https.ClientRequest that never calls the response callback
+    // and does NOT emit 'error' on destroy — so only the overall deadline
+    // can settle the promise (not the error handler with CONNECTION_ERROR).
+    class FakeRequest extends EventEmitter {
+      destroyed = false;
+      destroy() { this.destroyed = true; /* intentionally silent — deadline owns the rejection */ }
+      write() { return true; }
+      end() { return this; }
+    }
+    const fakeReq = new FakeRequest();
+
+    vi.spyOn(https, 'request').mockImplementation(
+      (_opts: unknown, _cb?: unknown) => fakeReq as unknown as ReturnType<typeof https.request>
+    );
+
+    // retries: 0 so there is no retry loop to advance through; the deadline
+    // fires once and the promise rejects immediately.
+    const client = new HttpClient({
+      baseUrl: 'https://vault.example.com',
+      timeout: 200,
+      retries: 0,
+      rejectUnauthorized: false,
+    });
+
+    // Attach a rejection handler immediately so no "unhandled rejection" fires
+    // while we advance fake timers past the deadline.
+    const promise = client.get<unknown>('/slow').catch((e: unknown) => e);
+
+    // Advance fake time past the deadline — the overall deadline timer should fire.
+    await vi.advanceTimersByTimeAsync(300);
+
+    const result = await promise;
+    expect(result).toMatchObject({ errorCode: 'TIMEOUT' });
+    expect(result).toBeInstanceOf(ZnVaultError);
+  });
+
+  it('does NOT reject prematurely when response arrives before deadline', async () => {
+    vi.useFakeTimers();
+
+    // A fake request where the response arrives quickly (before the timeout).
+    class FakeRequest extends EventEmitter {
+      destroyed = false;
+      destroy() { this.destroyed = true; }
+      write() { return true; }
+      end() {
+        // Simulate an immediate 200 response with a JSON body.
+        const res = new EventEmitter() as NodeJS.ReadableStream & EventEmitter & { statusCode: number; headers: Record<string, string> };
+        res.statusCode = 200;
+        res.headers = {};
+        // Schedule response delivery in the next microtask so the caller
+        // has time to register its handlers.
+        Promise.resolve().then(() => {
+          res.emit('data', Buffer.from(JSON.stringify({ ok: true })));
+          res.emit('end');
+        });
+        // The callback passed to https.request receives the res object.
+        // We stored it in the mock so we can invoke it here.
+        this.emit('_response', res);
+        return this;
+      }
+    }
+
+    let capturedCallback: ((res: unknown) => void) | undefined;
+    vi.spyOn(https, 'request').mockImplementation(
+      (_opts: unknown, cb?: unknown) => {
+        capturedCallback = cb as (res: unknown) => void;
+        const req = new FakeRequest();
+        req.on('_response', (res) => { capturedCallback?.(res); });
+        return req as unknown as ReturnType<typeof https.request>;
+      }
+    );
+
+    const client = new HttpClient({
+      baseUrl: 'https://vault.example.com',
+      timeout: 5000,
+      rejectUnauthorized: false,
+    });
+
+    const promise = client.get<{ ok: boolean }>('/fast');
+
+    // Advance just a little — response arrives, deadline must be cleared.
+    await vi.advanceTimersByTimeAsync(10);
+
+    const result = await promise;
+    expect(result).toEqual({ ok: true });
   });
 });
 
