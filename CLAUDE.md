@@ -58,27 +58,56 @@ Integration tests require a running vault instance. Use the SDK test runner from
 
 ```
 src/
-├── index.ts              # Main exports
-├── client.ts             # ZnVaultClient builder and configuration
-├── http/                 # HTTP client implementation
-│   ├── http-client.ts    # Axios-based HTTP client
-│   └── auth/             # Authentication providers
-│       ├── api-key.ts    # Static API key auth
-│       ├── file-api-key.ts # File-based API key with auto-refresh
-│       └── jwt.ts        # JWT token management
-├── clients/              # API client implementations
-│   ├── secrets.ts        # Secrets CRUD
-│   ├── kms.ts            # Key Management Service
-│   ├── auth.ts           # Authentication operations
-│   ├── users.ts          # User management
-│   ├── roles.ts          # Role management
-│   ├── tenants.ts        # Tenant management
-│   ├── policies.ts       # ABAC policy management
-│   ├── audit.ts          # Audit log operations
-│   └── health.ts         # Health checks
-├── models/               # TypeScript interfaces and types
-└── errors/               # Error classes
+├── index.ts              # ZnVaultClient class + ZnVaultClientBuilder + all public re-exports
+├── types/
+│   └── index.ts          # All shared TypeScript interfaces and types
+├── http/
+│   ├── client.ts         # HttpClient + error classes (ZnVaultError, AuthenticationError,
+│   │                     #   AuthorizationError, NotFoundError, RateLimitError, ValidationError)
+│   ├── body.ts           # Request body helpers
+│   └── index.ts          # Re-exports
+├── auth/
+│   ├── client.ts         # AuthClient (login, refresh, logout, API-key ops)
+│   ├── provider.ts       # AuthProvider interface + FileApiKeyAuth implementation
+│   └── index.ts          # Re-exports
+├── secrets/
+│   ├── client.ts         # SecretsClient
+│   └── index.ts          # Re-exports
+├── kms/
+│   ├── client.ts         # KmsClient
+│   └── index.ts          # Re-exports
+├── certificates/
+│   ├── client.ts         # CertificatesClient (X.509 PKI)
+│   └── index.ts          # Re-exports
+├── ssh-ca/
+│   ├── client.ts         # SSHCAClient
+│   └── index.ts          # Re-exports
+├── sso/
+│   ├── client.ts         # SsoClient (OAuth2/OIDC SSO apps)
+│   ├── middleware.ts      # Express/Fastify SSO middleware helpers
+│   ├── types.ts          # SSO-specific types
+│   └── index.ts          # Re-exports
+├── audit/
+│   ├── client.ts         # AuditClient
+│   └── index.ts          # Re-exports
+├── health/
+│   ├── client.ts         # HealthClient
+│   └── index.ts          # Re-exports
+├── admin/                # Tenant-scoped admin clients
+│   ├── users.ts          # UsersClient
+│   ├── roles.ts          # RolesClient
+│   ├── policies.ts       # PoliciesClient (ABAC)
+│   ├── tenants.ts        # TenantsClient
+│   └── index.ts          # Re-exports
+└── superadmin/
+    ├── auth.ts           # SuperadminAuthClient
+    ├── index.ts          # ZnVaultSuperadminClient + re-exports
 ```
+
+**Key entry points:**
+- `src/index.ts` — the single import surface; exports `ZnVaultClient`, `ZnVaultClientBuilder`, all sub-clients, error classes, and all types from `src/types/index.ts`.
+- `src/http/client.ts` — low-level HTTP layer; owns all error classes (`ZnVaultError` hierarchy). No auth-sub-directory exists; authentication providers live in `src/auth/provider.ts`.
+- `src/admin/` — four flat files (no `client.ts`): each exports its own named client class directly.
 
 ## Release Process
 
