@@ -298,8 +298,8 @@ export class HttpClient {
       // Already past refresh time - refresh immediately on next tick
       // (but not synchronously to avoid infinite loops)
       this.managedKeyState.refreshTimer = setTimeout(() => {
-        this.doManagedKeyRefresh().catch((err) => {
-          this.managedKeyState?.onRotationError?.(err);
+        this.doManagedKeyRefresh().catch((err: unknown) => {
+          this.managedKeyState?.onRotationError?.(err instanceof Error ? err : new Error(String(err)));
         });
       }, 100);
       return;
@@ -308,8 +308,8 @@ export class HttpClient {
     // Schedule refresh
     const delay = refreshAt - now;
     this.managedKeyState.refreshTimer = setTimeout(() => {
-      this.doManagedKeyRefresh().catch((err) => {
-        this.managedKeyState?.onRotationError?.(err);
+      this.doManagedKeyRefresh().catch((err: unknown) => {
+        this.managedKeyState?.onRotationError?.(err instanceof Error ? err : new Error(String(err)));
       });
     }, delay);
   }
@@ -493,7 +493,7 @@ export class HttpClient {
 
           let errorResponse: ZnVaultErrorResponse;
           try {
-            errorResponse = JSON.parse(data);
+            errorResponse = JSON.parse(data) as ZnVaultErrorResponse;
           } catch {
             errorResponse = {
               error: 'Unknown Error',

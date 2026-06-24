@@ -1,7 +1,6 @@
 // Path: zn-vault-sdk-node/test/integration.test.ts
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import type { SecretType } from '../src/index.js';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { ZnVaultClient, ZnVaultSuperadminClient } from '../src/index.js';
 import { TestConfig } from './test-config.js';
 

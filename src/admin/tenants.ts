@@ -33,7 +33,7 @@ export class TenantsClient {
     if (response && typeof response === 'object' && 'data' in response && 'success' in response) {
       return response.data;
     }
-    return response as Tenant;
+    return response;
   }
 
   async update(id: string, request: UpdateTenantRequest): Promise<Tenant> {

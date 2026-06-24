@@ -987,6 +987,9 @@ export type CertificateStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'SUSPENDED' |
 /**
  * Certificate kind/category.
  */
+// The named kinds are retained as documentation/IDE hints; `| string` keeps the
+// type open to custom kinds.
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type CertificateKind = 'AEAT' | 'FNMT' | 'CAMERFIRMA' | 'CUSTOM' | string;
 
 /**
