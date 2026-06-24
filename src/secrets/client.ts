@@ -7,7 +7,7 @@ import type {
   CreateSecretRequest,
   UpdateSecretRequest,
   SecretFilter,
-  SecretVersion,
+  SecretHistoryEntry,
   PaginatedResponse,
   SecretType,
   SecretSubType,
@@ -62,12 +62,10 @@ export class SecretsClient {
 
   async updateMetadata(
     id: string,
-    metadata: { tags?: string[]; ttlUntil?: string; expiresAt?: string }
+    metadata: { tags?: string[] }
   ): Promise<Secret> {
-    return this.http.patch<Secret>(`/v1/secrets/${id}/meta/data`, {
+    return this.http.patch<Secret>(`/v1/secrets/${id}/metadata`, {
       tags: metadata.tags,
-      ttl_until: metadata.ttlUntil,
-      expires_at: metadata.expiresAt,
     });
   }
 
@@ -85,7 +83,7 @@ export class SecretsClient {
     if (filter?.subType) params.set('subType', filter.subType);
     if (filter?.fileMime) params.set('fileMime', filter.fileMime);
     if (filter?.expiringBefore) params.set('expiringBefore', filter.expiringBefore);
-    if (filter?.tags) params.set('tags', filter.tags.join(','));
+    // Note: the server's /v1/secrets querystring does not accept a `tags` param — omit it.
     if (filter?.aliasPrefix) params.set('aliasPrefix', filter.aliasPrefix);
     if (filter?.limit) params.set('limit', filter.limit.toString());
     if (filter?.offset) params.set('offset', filter.offset.toString());
@@ -95,11 +93,16 @@ export class SecretsClient {
     return this.http.get<PaginatedResponse<Secret>>(path);
   }
 
-  async getHistory(id: string): Promise<SecretVersion[]> {
-    const response = await this.http.get<{ history: SecretVersion[] }>(
-      `/v1/secrets/${id}/history`
-    );
-    return response.history;
+  async getHistory(
+    id: string,
+    opts?: { limit?: number; offset?: number }
+  ): Promise<PaginatedResponse<SecretHistoryEntry>> {
+    const params = new URLSearchParams();
+    if (opts?.limit !== undefined) params.set('limit', opts.limit.toString());
+    if (opts?.offset !== undefined) params.set('offset', opts.offset.toString());
+    const query = params.toString();
+    const path = query ? `/v1/secrets/${id}/history?${query}` : `/v1/secrets/${id}/history`;
+    return this.http.get<PaginatedResponse<SecretHistoryEntry>>(path);
   }
 
   async decryptVersion(id: string, version: number): Promise<SecretWithData> {

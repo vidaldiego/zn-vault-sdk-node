@@ -569,6 +569,9 @@ export interface UpdateSecretRequest {
 
 /**
  * Filter options for listing secrets.
+ *
+ * Note: the server's /v1/secrets querystring does not accept a `tags` param —
+ * any `tags` value in this filter is intentionally ignored by the SDK.
  */
 export interface SecretFilter {
   type?: SecretType;
@@ -578,6 +581,7 @@ export interface SecretFilter {
   fileMime?: string;
   /** Find secrets expiring before this date (ISO 8601) */
   expiringBefore?: string;
+  /** @deprecated The server does not support tag-based list filtering. This field is ignored. */
   tags?: string[];
   /** Filter by alias prefix (e.g., "web/*") */
   aliasPrefix?: string;
@@ -604,6 +608,28 @@ export interface SecretVersion {
   createdBy?: string;
   supersededAt?: string;
   supersededBy?: string;
+}
+
+/**
+ * Secret history entry returned by GET /v1/secrets/:id/history.
+ * Each entry represents a previous version that was superseded by an update.
+ */
+export interface SecretHistoryEntry {
+  id: string;
+  secretId: string;
+  tenant: string;
+  alias: string;
+  type: string;
+  version: number;
+  ttlUntil?: string | null;
+  tags: string[];
+  contentType?: string | null;
+  createdBy: string;
+  createdByUsername?: string | null;
+  createdAt: string;
+  supersededAt?: string | null;
+  supersededBy?: string | null;
+  supersededByUsername?: string | null;
 }
 
 /**
