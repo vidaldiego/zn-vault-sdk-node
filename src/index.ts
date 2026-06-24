@@ -5,6 +5,7 @@ import { AuthClient } from './auth/client.js';
 import { SecretsClient } from './secrets/client.js';
 import { KmsClient } from './kms/client.js';
 import { CertificatesClient } from './certificates/client.js';
+import { SSHCAClient } from './ssh-ca/client.js';
 import { UsersClient } from './admin/users.js';
 import { RolesClient } from './admin/roles.js';
 import { PoliciesClient } from './admin/policies.js';
@@ -49,6 +50,7 @@ export class ZnVaultClient {
   private _secrets: SecretsClient;
   private _kms: KmsClient;
   private _certificates: CertificatesClient;
+  private _sshca: SSHCAClient;
   private _users: UsersClient;
   private _roles: RolesClient;
   private _policies: PoliciesClient;
@@ -81,6 +83,7 @@ export class ZnVaultClient {
     this._secrets = new SecretsClient(this.httpClient);
     this._kms = new KmsClient(this.httpClient);
     this._certificates = new CertificatesClient(this.httpClient);
+    this._sshca = new SSHCAClient(this.httpClient);
     this._users = new UsersClient(this.httpClient);
     this._roles = new RolesClient(this.httpClient);
     this._policies = new PoliciesClient(this.httpClient);
@@ -116,6 +119,11 @@ export class ZnVaultClient {
   /** Certificate lifecycle management operations */
   get certificates(): CertificatesClient {
     return this._certificates;
+  }
+
+  /** SSH Certificate Authority operations (sign OpenSSH user certificates) */
+  get sshca(): SSHCAClient {
+    return this._sshca;
   }
 
   /** User management (admin) */
@@ -469,6 +477,7 @@ export { AuthClient } from './auth/index.js';
 export { SecretsClient } from './secrets/index.js';
 export { KmsClient } from './kms/index.js';
 export { CertificatesClient } from './certificates/index.js';
+export { SSHCAClient } from './ssh-ca/index.js';
 export { UsersClient, RolesClient, PoliciesClient } from './admin/index.js';
 // TenantsClient is now part of ZnVaultSuperadminClient (tenant CRUD is superadmin-only).
 export { ZnVaultSuperadminClient, SuperadminAuthClient } from './superadmin/index.js';

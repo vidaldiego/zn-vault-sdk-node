@@ -395,6 +395,82 @@ await client.kms.enableKey(key.id);
 await client.kms.scheduleKeyDeletion(key.id, 7); // 7 days pending window
 ```
 
+## SSH Certificate Authority
+
+Sign short-lived OpenSSH **user certificates** against the tenant SSH CA. The
+returned `certificate` is a raw OpenSSH certificate string, ready to hand
+straight to the [`ssh2`](https://www.npmjs.com/package/ssh2) library for
+cert-based authentication.
+
+```typescript
+import { generateKeyPairSync } from 'node:crypto';
+import { Client as SshClient } from 'ssh2';
+
+// 1. Per host connection: generate an ephemeral keypair (your code).
+const { publicKey, privateKey } = generateKeyPairSync('ed25519', {
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
+const openSshPublicKey = /* your OpenSSH-format public key, e.g. "ssh-ed25519 AAAA..." */;
+
+// 2. Ask the vault to sign it. `principals` is an admin override
+//    (requires SSH_CA_ADMIN / admin-crypto); omit it to let the server
+//    resolve principals from your SSO group memberships.
+const { certificate, serial, principals, validBefore } = await client.sshca.sign({
+  publicKey: openSshPublicKey,
+  principals: ['root'],
+  ttlSeconds: 3600,
+});
+
+// 3. Feed the cert straight into ssh2.
+const conn = new SshClient();
+conn.connect({
+  host: 'server.example.com',
+  username: 'root',
+  privateKey,        // your ephemeral private key
+  certificate,       // the OpenSSH cert string returned above
+});
+
+// Convenience: get just the certificate string in one call.
+const cert = await client.sshca.signString(openSshPublicKey, {
+  principals: ['root'],
+  ttlSeconds: 3600,
+});
+```
+
+### CA configuration & discovery
+
+```typescript
+// Tenant CA status / config (tenant derived from your auth)
+const ca = await client.sshca.getCa();           // { initialized, publicKey, keyType, ... }
+await client.sshca.initCa({ keyType: 'ed25519' }); // initialize (one-time)
+
+// Public discovery endpoints (no auth) — for sshd TrustedUserCAKeys / RevokedKeys
+const pub = await client.sshca.getCaPublicKey('acme');     // { publicKey, fingerprint, keyType }
+const rawKey = await client.sshca.getCaPublicKeyRaw('acme'); // raw OpenSSH string
+const krl = await client.sshca.getKrl('acme');             // Buffer (OpenSSH KRL)
+```
+
+### Principal mappings, server groups & issued certificates
+
+```typescript
+// Map an SSO group to SSH principals
+await client.sshca.createPrincipalMapping({ groupId, principals: ['ops', 'root'] });
+const mappings = await client.sshca.listPrincipalMappings();
+
+// Server groups + authorized-principals rules
+const group = await client.sshca.createServerGroup({ name: 'prod-web' });
+await client.sshca.setServerGroupAccess(group.id, {
+  linuxUser: 'root',
+  allowedPrincipals: ['ops'],
+});
+const principalsFile = await client.sshca.getAuthorizedPrincipals(group.id); // text
+
+// List / inspect / revoke issued certificates
+const page = await client.sshca.listCertificates({ activeOnly: true, limit: 50 });
+await client.sshca.revokeCertificate(page.items[0].id, 'rotated');
+```
+
 ## Admin Operations
 
 ### User Management

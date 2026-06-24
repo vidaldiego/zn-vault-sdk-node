@@ -1133,3 +1133,235 @@ export interface CertificateAccessLogEntry {
 export interface CertificateAccessLog {
   entries: CertificateAccessLogEntry[];
 }
+
+// ============================================================================
+// SSH Certificate Authority
+// ============================================================================
+
+/**
+ * SSH CA key algorithm.
+ */
+export type SshCaKeyType = 'ed25519' | 'rsa-4096';
+
+/**
+ * Request to sign an SSH user public key into an OpenSSH certificate.
+ *
+ * `principals` is an admin override: supplying it requires `SSH_CA_ADMIN`
+ * permission (or tenant admin-crypto access). For normal users it is omitted
+ * and the server resolves principals from SSO group memberships.
+ */
+export interface SignSshCertificateRequest {
+  /** The SSH user public key to sign, in OpenSSH format (e.g. "ssh-ed25519 AAAA..."). */
+  publicKey: string;
+  /** Requested certificate validity in seconds (clamped to the CA's max TTL). */
+  ttlSeconds?: number;
+  /** Explicit principals to embed (admin override; requires SSH_CA_ADMIN / admin-crypto). */
+  principals?: string[];
+}
+
+/**
+ * Result of signing an SSH user public key.
+ *
+ * `certificate` is a raw OpenSSH certificate string
+ * (e.g. "ssh-ed25519-cert-v01@openssh.com AAAA..."), suitable for passing
+ * directly to the `ssh2` library's `ConnectConfig.certificate` field.
+ */
+export interface SignSshCertificateResponse {
+  /** Raw OpenSSH certificate string (ssh2-ready). */
+  certificate: string;
+  /** Certificate serial number (numeric, returned as a string). */
+  serial: string;
+  /** Principals granted by the certificate. */
+  principals: string[];
+  /** Validity start (ISO 8601). */
+  validAfter: string;
+  /** Validity end (ISO 8601). */
+  validBefore: string;
+  /** SHA256 fingerprint of the signed public key. */
+  fingerprint: string;
+}
+
+/**
+ * Public SSH CA public key (from the unauthenticated discovery endpoint).
+ */
+export interface SshCaPublicKey {
+  /** CA public key in OpenSSH format. */
+  publicKey: string;
+  /** SHA256 fingerprint of the CA public key. */
+  fingerprint: string;
+  /** CA key algorithm. */
+  keyType: SshCaKeyType;
+}
+
+/**
+ * SSH CA status/configuration for the authenticated tenant (`GET /v1/ssh/ca`).
+ */
+export interface SshCaInfo {
+  id: string;
+  /** Whether the CA has been initialized for this tenant. */
+  initialized: boolean;
+  /** CA public key in OpenSSH format (null until initialized). */
+  publicKey: string | null;
+  /** SHA256 fingerprint of the CA public key (null until initialized). */
+  fingerprint: string | null;
+  /** CA key algorithm (null until initialized). */
+  keyType: SshCaKeyType | null;
+  /** Default certificate TTL in seconds (null until initialized). */
+  defaultTtlSeconds: number | null;
+  /** Maximum certificate TTL in seconds (null until initialized). */
+  maxTtlSeconds: number | null;
+  /** OpenSSH extensions permitted on issued certificates. */
+  allowedExtensions: string[];
+}
+
+/**
+ * Request to initialize the tenant SSH CA (`POST /v1/ssh/ca`).
+ */
+export interface InitSshCaRequest {
+  /** CA key algorithm (default: ed25519). */
+  keyType?: SshCaKeyType;
+  /** Default certificate TTL in seconds (default: 28800 = 8h). */
+  defaultTtlSeconds?: number;
+  /** Maximum certificate TTL in seconds (default: 86400 = 24h). */
+  maxTtlSeconds?: number;
+  /** OpenSSH extensions permitted on issued certificates. */
+  allowedExtensions?: string[];
+}
+
+/**
+ * Newly initialized SSH CA (`POST /v1/ssh/ca` result).
+ */
+export interface SshCa {
+  id: string;
+  publicKey: string;
+  fingerprint: string;
+  keyType: SshCaKeyType;
+  defaultTtlSeconds: number;
+  maxTtlSeconds: number;
+  allowedExtensions: string[];
+  createdAt: string;
+}
+
+/**
+ * Mapping from an SSO group to a set of SSH principals.
+ */
+export interface SshPrincipalMapping {
+  id: string;
+  /** SSO group ID. */
+  groupId: string;
+  /** SSO group name (present on list responses). */
+  groupName?: string;
+  /** SSO group display name (present on list responses). */
+  groupDisplayName?: string | null;
+  /** SSH principals granted to members of the group. */
+  principals: string[];
+  createdAt: string;
+  /** User ID that created the mapping. */
+  createdBy?: string | null;
+}
+
+/**
+ * Request to create a principal mapping.
+ */
+export interface CreateSshPrincipalMappingRequest {
+  /** SSO group ID. */
+  groupId: string;
+  /** SSH principals to grant (at least one). */
+  principals: string[];
+}
+
+/**
+ * Request to update a principal mapping's principals.
+ */
+export interface UpdateSshPrincipalMappingRequest {
+  /** Replacement SSH principals (at least one). */
+  principals: string[];
+}
+
+/**
+ * A logical group of servers, used to author authorized-principals rules.
+ */
+export interface SshServerGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  /** User ID that created the group. */
+  createdBy?: string | null;
+}
+
+/**
+ * An access rule mapping a Linux user to the principals allowed to log in as it.
+ */
+export interface SshServerGroupAccessRule {
+  /** Target Linux account (e.g. "root", "ubuntu"). */
+  linuxUser: string;
+  /** Principals permitted to authenticate as that Linux user. */
+  allowedPrincipals: string[];
+}
+
+/**
+ * Server group with its access rules (`GET /v1/ssh/server-groups/:id`).
+ */
+export interface SshServerGroupDetail extends SshServerGroup {
+  accessRules: SshServerGroupAccessRule[];
+}
+
+/**
+ * Request to create a server group.
+ */
+export interface CreateSshServerGroupRequest {
+  name: string;
+  description?: string | null;
+}
+
+/**
+ * An issued SSH certificate record (list-row shape).
+ */
+export interface SshCertificate {
+  id: string;
+  /** Certificate serial number (numeric, returned as a string). */
+  serial: string;
+  userId: string | null;
+  /** Username resolved from the user ID (present on list rows). */
+  username?: string | null;
+  /** SHA256 fingerprint of the signed public key. */
+  fingerprint: string;
+  principals: string[];
+  /** Validity start (ISO 8601). */
+  validAfter: string;
+  /** Validity end (ISO 8601). */
+  validBefore: string;
+  revoked: boolean;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revocationReason: string | null;
+  createdAt: string;
+}
+
+/**
+ * Full issued-certificate record (`GET /v1/ssh/certificates/:id`).
+ *
+ * Adds the embedded OpenSSH `extensions` and the requesting client IP, which
+ * are not included in list rows.
+ */
+export interface SshCertificateDetail extends Omit<SshCertificate, 'username'> {
+  /** OpenSSH certificate extensions (e.g. ["permit-pty", "permit-port-forwarding"]). */
+  extensions: string[];
+  /** Client IP the signing request originated from. */
+  requestIp: string | null;
+}
+
+/**
+ * Filter options for listing issued SSH certificates.
+ */
+export interface SshCertificateFilter {
+  /** Only non-revoked, non-expired certificates. */
+  activeOnly?: boolean;
+  /** Filter by revocation state (true = revoked, false = not revoked). */
+  revoked?: boolean;
+  /** Filter by the requesting user ID. */
+  userId?: string;
+  limit?: number;
+  offset?: number;
+}
