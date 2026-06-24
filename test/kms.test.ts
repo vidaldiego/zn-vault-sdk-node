@@ -61,26 +61,28 @@ describe('KmsClient key metadata contract (mocked HTTP)', () => {
   let client: KmsClient; let http: ReturnType<typeof makeClient>['http'];
   beforeEach(() => ({ client, http } = makeClient()));
 
+  // Raw shape as emitted by the live server's getKey/getKeyByAlias handlers
+  // (id/usage/createdAt instead of keyId/keyUsage/createdDate — schema/handler drift).
   const wrappedKey = {
     keyMetadata: {
-      keyId: 'key-uuid-1',
+      id: 'key-uuid-1',
       alias: 'my/prod/key',
       arn: 'arn:zn-vault:kms:us-east-1:acme:key/key-uuid-1',
-      createdDate: '2026-01-01T00:00:00.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
       description: 'Production key',
       keyState: 'ENABLED',
-      keyUsage: 'ENCRYPT_DECRYPT',
+      usage: 'ENCRYPT_DECRYPT',
       keySpec: 'AES_256',
       multiRegion: false,
       origin: 'ZN_VAULT',
     },
   };
 
-  it('getKey unwraps keyMetadata and exposes keyState/createdDate (KMS-04/05)', async () => {
+  it('getKey unwraps keyMetadata, normalizes id→keyId, usage→keyUsage, createdAt→createdDate (KMS-04/05)', async () => {
     http.get.mockResolvedValue(wrappedKey);
     const key = await client.getKey('key-uuid-1');
     expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/key-uuid-1');
-    // Must unwrap keyMetadata
+    // Must unwrap keyMetadata AND normalize raw field names
     expect(key.keyId).toBe('key-uuid-1');
     expect(key.keyState).toBe('ENABLED');
     expect(key.createdDate).toBe('2026-01-01T00:00:00.000Z');
@@ -88,20 +90,27 @@ describe('KmsClient key metadata contract (mocked HTTP)', () => {
     // Must NOT have phantom rotation fields
     expect((key as Record<string, unknown>).rotationEnabled).toBeUndefined();
     expect((key as Record<string, unknown>).rotationPeriodDays).toBeUndefined();
-    // Must NOT expose old field aliases
+    // Must NOT expose raw field aliases — they must be mapped to canonical names
     expect((key as Record<string, unknown>).state).toBeUndefined();
     expect((key as Record<string, unknown>).createdAt).toBeUndefined();
+    expect((key as Record<string, unknown>).id).toBeUndefined();
     expect((key as Record<string, unknown>).usage).toBeUndefined();
   });
 
-  it('getKeyByAlias URL-encodes the alias and unwraps keyMetadata (KMS-09, URL-01)', async () => {
+  it('getKeyByAlias URL-encodes the alias and normalizes raw keyMetadata (KMS-09, URL-01)', async () => {
     http.get.mockResolvedValue(wrappedKey);
     const key = await client.getKeyByAlias('my/prod/key');
     // Slash in alias must be percent-encoded
     expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/alias/my%2Fprod%2Fkey');
+    // Normalized canonical names are present
     expect(key.keyId).toBe('key-uuid-1');
     expect(key.keyState).toBe('ENABLED');
     expect(key.createdDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(key.keyUsage).toBe('ENCRYPT_DECRYPT');
+    // Raw names must not leak through
+    expect((key as Record<string, unknown>).id).toBeUndefined();
+    expect((key as Record<string, unknown>).usage).toBeUndefined();
+    expect((key as Record<string, unknown>).createdAt).toBeUndefined();
   });
 
   it('createKey omits rotationEnabled/rotationPeriodDays from request body', async () => {

@@ -1085,6 +1085,13 @@ export interface AuditVerifyResult {
   lastVerified: string;
 }
 
+/**
+ * Response from GET /v1/audit.
+ *
+ * The live server returns only `items` and `pagination`. Aggregate statistics
+ * are available separately via `GET /v1/audit/stats` (see `AuditStats` and
+ * `AuditClient.getStats()`).
+ */
 export interface AuditListResponse {
   items: AuditEntry[];
   pagination: {
@@ -1092,11 +1099,6 @@ export interface AuditListResponse {
     limit: number;
     offset: number;
     hasMore: boolean;
-  };
-  stats: {
-    successCount: number;
-    failureCount: number;
-    uniqueUsers: number;
   };
 }
 

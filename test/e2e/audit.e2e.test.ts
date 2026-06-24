@@ -1,10 +1,10 @@
 // Path: zn-vault-sdk-node/test/e2e/audit.e2e.test.ts
 //
 // E2E assertions proving AUDIT-02/03 + getStats:
-//   AUDIT-02 — audit.list() returns { items, pagination, stats } with items
-//              having `result` ∈ {success, failure}.
-//   AUDIT-03 — stats inline in list response has { successCount, failureCount, uniqueUsers }.
+//   AUDIT-02 — audit.list() returns { items, pagination } (no stats field).
+//              Items have `result` ∈ {success, failure}.
 //   getStats  — audit.getStats() returns the full AuditStats shape.
+//              Stats are ONLY available via getStats(), not inline in list().
 //
 // Requires a live seeded vault (`npm run test:e2e`).
 
@@ -43,12 +43,12 @@ describe.skipIf(!isIntegrationEnabled)('E2E: Audit — contract fixes AUDIT-02/0
   // AUDIT-02: list() shape — items / pagination / stats
   // ---------------------------------------------------------------------------
 
-  it('AUDIT-02: audit.list() returns { items, pagination } with correct shapes', async () => {
+  it('AUDIT-02: audit.list() returns { items, pagination } — no stats field', async () => {
     if (serverUnreachable) return;
 
     const response = await adminClient.audit.list({ limit: 10 });
 
-    // Top-level structure — server returns { items, pagination }
+    // Top-level structure — server returns only { items, pagination }
     expect(response).toBeDefined();
     expect(Array.isArray(response.items)).toBe(true);
     expect(response.pagination).toBeDefined();
@@ -59,10 +59,8 @@ describe.skipIf(!isIntegrationEnabled)('E2E: Audit — contract fixes AUDIT-02/0
     expect(typeof response.pagination.offset).toBe('number');
     expect(typeof response.pagination.hasMore).toBe('boolean');
 
-    // stats is defined in the AuditListResponse type but the server currently
-    // does not include it in the list response body — it is available via
-    // getStats() separately. This is a known discrepancy between the type
-    // and the live server response; the test documents the actual live shape.
+    // stats must NOT be present in the list response — use getStats() instead
+    expect((response as unknown as Record<string, unknown>).stats).toBeUndefined();
 
     console.log(
       `AUDIT-02 pass: items=${response.items.length}, ` +

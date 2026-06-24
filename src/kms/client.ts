@@ -3,6 +3,7 @@
 import type { HttpClient } from '../http/client.js';
 import type {
   KmsKey,
+  KeyUsage,
   CreateKeyRequest,
   EncryptRequest,
   EncryptResponse,
@@ -19,26 +20,52 @@ import type {
   ScheduleDeletionResponse,
 } from '../types/index.js';
 
-/** Raw shape returned by the five mutation endpoints that still emit `createdAt`. */
-type RawKmsKey = Omit<KmsKey, 'createdDate'> & { createdDate?: string; createdAt?: string };
+/**
+ * Raw shape as returned by the server. Read endpoints (`getKey`, `getKeyByAlias`)
+ * emit `id`/`usage`/`createdAt` while mutation endpoints and some other paths
+ * emit the canonical `keyId`/`keyUsage`/`createdDate`. All three pairs may be
+ * present simultaneously during a transition period — normalizeKmsKey handles
+ * both by preferring the canonical name and falling back to the raw name.
+ */
+type RawKmsKey = Omit<KmsKey, 'keyId' | 'keyUsage' | 'createdDate'> & {
+  /** Canonical name (mutation endpoints / createKey) */
+  keyId?: string;
+  /** Raw name emitted by read endpoints (getKey, getKeyByAlias) */
+  id?: string;
+  /** Canonical name */
+  keyUsage?: KeyUsage;
+  /** Raw name emitted by read endpoints */
+  usage?: KeyUsage;
+  /** Canonical name */
+  createdDate?: string;
+  /** Raw name emitted by read endpoints and mutation endpoints */
+  createdAt?: string;
+};
 
 /**
- * Shields callers from the server inconsistency where mutation endpoints
- * (`updateKeyDescription`, `updateKeyAlias`, `enableKey`, `disableKey`,
- * `cancelKeyDeletion`) return `createdAt` instead of `createdDate`.
- * Read endpoints (`getKey`, `getKeyByAlias`, `listKeys`, `createKey`) already
- * emit `createdDate` and are not passed through this helper.
+ * Normalizes the raw server key shape into the canonical SDK `KmsKey` type.
+ *
+ * The server has a schema/handler drift on the read endpoints where the live
+ * handler emits `id`/`usage`/`createdAt` while the type contract and mutation
+ * endpoints use `keyId`/`keyUsage`/`createdDate`. This function is idempotent:
+ * if the canonical name is already present it is used as-is; the raw name is
+ * only a fallback.
  */
 function normalizeKmsKey(raw: RawKmsKey): KmsKey {
-  const { createdAt, createdDate, ...rest } = raw;
-  return { ...rest, createdDate: createdDate ?? createdAt ?? '' };
+  const { id, keyId, usage, keyUsage, createdAt, createdDate, ...rest } = raw;
+  return {
+    ...rest,
+    keyId: keyId ?? id ?? '',
+    keyUsage: (keyUsage ?? usage) as KeyUsage,
+    createdDate: createdDate ?? createdAt ?? '',
+  };
 }
 
 export class KmsClient {
   constructor(private http: HttpClient) {}
 
   async createKey(request: CreateKeyRequest): Promise<KmsKey> {
-    return this.http.post<KmsKey>('/v1/kms/keys', {
+    const raw = await this.http.post<RawKmsKey>('/v1/kms/keys', {
       alias: request.alias,
       description: request.description,
       usage: request.usage ?? 'ENCRYPT_DECRYPT',
@@ -47,16 +74,17 @@ export class KmsClient {
       multiRegion: request.multiRegion,
       tags: request.tags,
     });
+    return normalizeKmsKey(raw);
   }
 
   async getKey(keyId: string): Promise<KmsKey> {
-    const r = await this.http.get<{ keyMetadata: KmsKey }>(`/v1/kms/keys/${keyId}`);
-    return r.keyMetadata;
+    const r = await this.http.get<{ keyMetadata: RawKmsKey }>(`/v1/kms/keys/${keyId}`);
+    return normalizeKmsKey(r.keyMetadata);
   }
 
   async getKeyByAlias(alias: string): Promise<KmsKey> {
-    const r = await this.http.get<{ keyMetadata: KmsKey }>(`/v1/kms/keys/alias/${encodeURIComponent(alias)}`);
-    return r.keyMetadata;
+    const r = await this.http.get<{ keyMetadata: RawKmsKey }>(`/v1/kms/keys/alias/${encodeURIComponent(alias)}`);
+    return normalizeKmsKey(r.keyMetadata);
   }
 
   async listKeys(filter?: KeyFilter): Promise<PaginatedResponse<KmsKey>> {
@@ -102,7 +130,8 @@ export class KmsClient {
   }
 
   async rotateKey(keyId: string): Promise<KmsKey> {
-    return this.http.post<KmsKey>(`/v1/kms/keys/${keyId}/rotate`);
+    const raw = await this.http.post<RawKmsKey>(`/v1/kms/keys/${keyId}/rotate`);
+    return normalizeKmsKey(raw);
   }
 
   async setRotationStatus(

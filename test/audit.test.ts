@@ -19,7 +19,6 @@ describe('AuditClient (mocked HTTP)', () => {
     const mockResponse = {
       items: [],
       pagination: { total: 0, limit: 50, offset: 0, hasMore: false },
-      stats: { successCount: 0, failureCount: 0, uniqueUsers: 0 },
     };
     http.get.mockResolvedValue(mockResponse);
 
@@ -48,8 +47,8 @@ describe('AuditClient (mocked HTTP)', () => {
     expect(callArg).not.toContain('endDate=');
   });
 
-  // AUDIT-02: list() returns items + pagination + stats
-  it('list returns items, pagination, and stats from server response', async () => {
+  // AUDIT-02: list() returns items + pagination (no stats — stats are via getStats())
+  it('list returns items and pagination from server response (no stats field)', async () => {
     const mockEntry = {
       id: 'a1b2c3',
       timestamp: '2026-01-15T10:00:00Z',
@@ -64,7 +63,6 @@ describe('AuditClient (mocked HTTP)', () => {
     const mockResponse = {
       items: [mockEntry],
       pagination: { total: 1, limit: 50, offset: 0, hasMore: false },
-      stats: { successCount: 1, failureCount: 0, uniqueUsers: 1 },
     };
     http.get.mockResolvedValue(mockResponse);
 
@@ -75,9 +73,8 @@ describe('AuditClient (mocked HTTP)', () => {
     expect(result.items[0].result).toBe('success');
     expect(result.pagination.total).toBe(1);
     expect(result.pagination.hasMore).toBe(false);
-    expect(result.stats.successCount).toBe(1);
-    expect(result.stats.failureCount).toBe(0);
-    expect(result.stats.uniqueUsers).toBe(1);
+    // stats is NOT part of the list response — use getStats() for stats
+    expect((result as Record<string, unknown>).stats).toBeUndefined();
   });
 
   // EXPORT-01: exportLogs() returns bare raw-shape array and sends format=json in query

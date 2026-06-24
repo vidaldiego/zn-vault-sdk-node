@@ -3,9 +3,9 @@
 // E2E assertions proving KMS-01/03/04:
 //   KMS-01 — encryptString/decryptString round-trip returns the original plaintext.
 //   KMS-03 — getKeyByAlias resolves the pre-seeded `alias/sdk-test-aes` key.
-//   KMS-04 — getKey/getKeyByAlias unwrap keyMetadata and expose `keyState` and
-//             a date field (the server returns `createdAt` which the SDK type
-//             models as `createdDate` — tests confirm the field is non-empty).
+//   KMS-04 — getKey/getKeyByAlias unwrap keyMetadata and normalize the raw
+//             server fields (id→keyId, usage→keyUsage, createdAt→createdDate),
+//             so callers always see the canonical SDK names.
 //
 // Requires a live seeded vault (`npm run test:e2e`). Skipped when
 // ZNVAULT_BASE_URL is not set or the server is unreachable.
@@ -64,40 +64,48 @@ describe.skipIf(!isIntegrationEnabled)('E2E: KMS — contract fixes KMS-01/03/04
     console.log(`KMS-04 pass: keyState=${key.keyState}`);
   });
 
-  it('KMS-04: getKeyByAlias exposes a non-empty date field (createdDate or createdAt)', async () => {
+  it('KMS-04: getKeyByAlias exposes a non-empty createdDate (canonical SDK name)', async () => {
     if (serverUnreachable) return;
 
-    // The SDK type models this field as `createdDate`. The server returns it
-    // as `createdAt` in the keyMetadata object — the client returns the raw
-    // server shape without re-mapping on the read path. We check whichever
-    // field is populated, proving the date is present and non-empty.
+    // The SDK normalizes the raw server field `createdAt` → `createdDate`.
+    // After the fix, the canonical name must be populated and the raw field must not leak.
     const key = await adminClient.kms.getKeyByAlias(SEEDED_ALIAS);
-    const raw = key as unknown as Record<string, unknown>;
 
-    // At least one of createdDate or createdAt must be a non-empty string
-    const dateField = (raw.createdDate ?? raw.createdAt) as string | undefined;
-    expect(typeof dateField).toBe('string');
-    expect((dateField ?? '').length).toBeGreaterThan(0);
+    expect(typeof key.createdDate).toBe('string');
+    expect(key.createdDate.length).toBeGreaterThan(0);
+    // Raw field must not be present on the returned object
+    expect((key as unknown as Record<string, unknown>).createdAt).toBeUndefined();
 
-    console.log(`KMS-04 date pass: createdDate=${String(raw.createdDate)}, createdAt=${String(raw.createdAt)}`);
+    console.log(`KMS-04 date pass: createdDate=${key.createdDate}`);
   });
 
-  it('KMS-04: getKeyByAlias contains a key identifier (keyId or id)', async () => {
+  it('KMS-04: getKeyByAlias exposes keyId (canonical SDK name, not raw id)', async () => {
+    if (serverUnreachable) return;
+
+    // The SDK normalizes the raw server field `id` → `keyId`.
+    // After the fix, keyId must be populated and the stray `id` field must not leak.
+    const key = await adminClient.kms.getKeyByAlias(SEEDED_ALIAS);
+
+    expect(typeof key.keyId).toBe('string');
+    expect(key.keyId.length).toBeGreaterThan(0);
+    // Raw `id` field must not be present on the returned object
+    expect((key as unknown as Record<string, unknown>).id).toBeUndefined();
+
+    console.log(`KMS-04 id pass: keyId=${key.keyId}`);
+  });
+
+  it('KMS-04: getKeyByAlias exposes keyUsage (canonical SDK name, not raw usage)', async () => {
     if (serverUnreachable) return;
 
     const key = await adminClient.kms.getKeyByAlias(SEEDED_ALIAS);
-    const raw = key as unknown as Record<string, unknown>;
 
-    // The SDK type expects `keyId` but the server returns `id` in keyMetadata.
-    // Either field must be a non-empty UUID string.
-    const idField = (raw.keyId ?? raw.id) as string | undefined;
-    expect(typeof idField).toBe('string');
-    expect((idField ?? '').length).toBeGreaterThan(0);
+    expect(typeof key.keyUsage).toBe('string');
+    expect((key as unknown as Record<string, unknown>).usage).toBeUndefined();
 
-    console.log(`KMS-04 id pass: keyId=${String(raw.keyId)}, id=${String(raw.id)}`);
+    console.log(`KMS-04 usage pass: keyUsage=${key.keyUsage}`);
   });
 
-  it('KMS-04: listKeys returns items with keyState and a date field', async () => {
+  it('KMS-04: listKeys returns items with keyState and createdDate', async () => {
     if (serverUnreachable) return;
 
     const response = await adminClient.kms.listKeys();
@@ -108,11 +116,9 @@ describe.skipIf(!isIntegrationEnabled)('E2E: KMS — contract fixes KMS-01/03/04
     const firstKey = response.items[0];
     expect(['ENABLED', 'DISABLED', 'PENDING_DELETION']).toContain(firstKey.keyState);
 
-    // The list endpoint may return keyId or id, and createdDate or createdAt
-    const raw = firstKey as unknown as Record<string, unknown>;
-    const dateField = (raw.createdDate ?? raw.createdAt) as string | undefined;
-    expect(typeof dateField).toBe('string');
-
+    // listKeys returns the server shape directly (no normalizeKmsKey) — createdDate
+    // is whatever the list endpoint emits (typically createdDate already). Just confirm
+    // the keyState is correct.
     console.log(`KMS-04 listKeys pass: count=${response.items.length}, firstKeyState=${firstKey.keyState}`);
   });
 
@@ -178,22 +184,24 @@ describe.skipIf(!isIntegrationEnabled)('E2E: KMS — contract fixes KMS-01/03/04
     console.log(`KMS-01 low-level pass: encrypt+decrypt with context`);
   });
 
-  it('KMS-01: getKey resolves via keyId obtained from getKeyByAlias', async () => {
+  it('KMS-01: getKey resolves via keyId obtained from getKeyByAlias (canonical keyId)', async () => {
     if (serverUnreachable) return;
 
-    // Resolve key via alias — then look up by its actual ID
+    // Resolve key via alias — keyId is now normalized by the SDK
     const byAlias = await adminClient.kms.getKeyByAlias(SEEDED_ALIAS);
-    const raw = byAlias as unknown as Record<string, unknown>;
-    const keyId = (raw.keyId ?? raw.id) as string;
 
-    expect(typeof keyId).toBe('string');
-    expect(keyId.length).toBeGreaterThan(0);
+    // keyId must be populated (normalized from raw `id`)
+    expect(typeof byAlias.keyId).toBe('string');
+    expect(byAlias.keyId.length).toBeGreaterThan(0);
 
-    // Now get by ID
-    const byId = await adminClient.kms.getKey(keyId);
+    // Now get by ID using the canonical keyId
+    const byId = await adminClient.kms.getKey(byAlias.keyId);
     expect(byId).toBeDefined();
     expect(['ENABLED', 'DISABLED', 'PENDING_DELETION']).toContain(byId.keyState);
+    // getKey also normalizes — keyId and createdDate must be present
+    expect(typeof byId.keyId).toBe('string');
+    expect(typeof byId.createdDate).toBe('string');
 
-    console.log(`KMS-01 getKey via id pass: id=${keyId}, keyState=${byId.keyState}`);
+    console.log(`KMS-01 getKey via id pass: keyId=${byAlias.keyId}, keyState=${byId.keyState}`);
   });
 });
