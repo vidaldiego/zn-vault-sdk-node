@@ -502,6 +502,10 @@ export class HttpClient {
         headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
 
+      // Hoist once so both the socket-idle option and the wall-clock deadline
+      // use the same resolved value (avoids double evaluation).
+      const timeoutMs = options.timeout ?? this.timeout;
+
       const requestOptions: https.RequestOptions = {
         method: options.method,
         hostname: url.hostname,
@@ -509,7 +513,7 @@ export class HttpClient {
         path: url.pathname + url.search,
         headers,
         // Socket-idle timeout (inactivity). Complementary to the overall deadline below.
-        timeout: options.timeout ?? this.timeout,
+        timeout: timeoutMs,
         rejectUnauthorized: this.rejectUnauthorized,
       };
 
@@ -524,15 +528,6 @@ export class HttpClient {
         clearTimeout(deadline);
         fn();
       };
-
-      // Overall wall-clock deadline: fires regardless of socket activity.
-      // The socket-idle `req.on('timeout')` below is complementary (catches idle
-      // sockets) but a server that trickles bytes slowly would never trip it.
-      const timeoutMs = options.timeout ?? this.timeout;
-      deadline = setTimeout(() => {
-        req.destroy();
-        settle(() => reject(new ZnVaultError('Request exceeded deadline', 0, 'TIMEOUT')));
-      }, timeoutMs);
 
       const req = https.request(requestOptions, (res) => {
         const chunks: Buffer[] = [];
@@ -584,6 +579,17 @@ export class HttpClient {
           settle(() => reject(this.createError(statusCode, errorResponse, res.headers)));
         });
       });
+
+      // Overall wall-clock deadline: fires regardless of socket activity.
+      // Assigned here (after `req` is declared) so the callback closure captures
+      // a fully-initialised `req` reference — avoids the forward-reference fragility
+      // of setting the timer before `https.request` is called.
+      // The socket-idle `req.on('timeout')` below is complementary (catches idle
+      // sockets) but a server that trickles bytes slowly would never trip it.
+      deadline = setTimeout(() => {
+        req.destroy();
+        settle(() => reject(new ZnVaultError('Request exceeded deadline', 0, 'TIMEOUT')));
+      }, timeoutMs);
 
       req.on('error', (error) => {
         settle(() => reject(new ZnVaultError(`Connection error: ${error.message}`, 0, 'CONNECTION_ERROR')));

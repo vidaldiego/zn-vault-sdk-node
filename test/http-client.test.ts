@@ -417,6 +417,64 @@ describe('TIMEOUT-01: overall request deadline rejects with TIMEOUT', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// ABORTED: mid-body connection drop rejects with ABORTED errorCode
+// ---------------------------------------------------------------------------
+
+describe('ABORTED: mid-body abort rejects with ABORTED', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rejects with errorCode ABORTED when res emits aborted mid-body', async () => {
+    // Build a fake https.ClientRequest. When end() is called it immediately
+    // invokes the response callback with a fake res EventEmitter that has
+    // res.complete = false (body not finished). After a tick we emit 'aborted'
+    // on the res to simulate a mid-body connection drop.
+    class FakeRequest extends EventEmitter {
+      destroyed = false;
+      private _cb: ((res: unknown) => void) | undefined;
+
+      constructor(cb: ((res: unknown) => void) | undefined) {
+        super();
+        this._cb = cb;
+      }
+
+      destroy() { this.destroyed = true; }
+      write() { return true; }
+      end() {
+        if (this._cb) {
+          const res = new EventEmitter() as EventEmitter & { complete: boolean; statusCode: number; headers: Record<string, string> };
+          res.complete = false;   // body is NOT done
+          res.statusCode = 200;
+          res.headers = {};
+          // Deliver the response immediately so the handler registers listeners,
+          // then emit 'aborted' on the next microtask.
+          this._cb(res);
+          Promise.resolve().then(() => { res.emit('aborted'); });
+        }
+        return this;
+      }
+    }
+
+    vi.spyOn(https, 'request').mockImplementation(
+      (_opts: unknown, cb?: unknown) =>
+        new FakeRequest(cb as ((res: unknown) => void) | undefined) as unknown as ReturnType<typeof https.request>
+    );
+
+    // retries: 0 avoids retry-loop interference; rejectUnauthorized: false avoids cert checks.
+    const client = new HttpClient({
+      baseUrl: 'https://vault.example.com',
+      retries: 0,
+      rejectUnauthorized: false,
+    });
+
+    await expect(client.get('/x')).rejects.toMatchObject({
+      errorCode: 'ABORTED',
+    });
+  });
+});
+
 describe('MANAGEDKEY-01: concurrent refreshManagedKey() shares one in-flight bind', () => {
   afterEach(() => {
     vi.restoreAllMocks();
