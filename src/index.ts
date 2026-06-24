@@ -489,7 +489,7 @@ export { ZnVaultSuperadminClient, SuperadminAuthClient } from './superadmin/inde
 export type { ZnVaultSuperadminConfig } from './superadmin/index.js';
 export { TenantsClient } from './admin/tenants.js';
 export { AuditClient } from './audit/index.js';
-export { HealthClient, type HealthStatus, type ReadinessStatus } from './health/index.js';
+export { HealthClient, type HealthCheck, type HealthStatus, type ReadinessStatus } from './health/index.js';
 
 // Re-export auth providers
 export {

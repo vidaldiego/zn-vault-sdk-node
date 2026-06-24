@@ -436,7 +436,10 @@ export interface User {
   email?: string;
   role?: UserRole;
   tenantId?: string;
-  totpEnabled: boolean;
+  /** Server emits only snake_case for this field. */
+  totp_enabled?: boolean;
+  /** @deprecated Use `totp_enabled` instead — the server only emits the snake_case variant. */
+  totpEnabled?: boolean;
   status?: UserStatus;
   createdAt?: string;
   updatedAt?: string;
@@ -523,8 +526,8 @@ export interface Secret {
   tags?: string[];
   contentType?: string | null;
   createdBy?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
@@ -851,8 +854,15 @@ export interface Tenant {
   id: string;
   name: string;
   status: TenantStatus;
+  /** Server emits quota fields in snake_case. */
+  max_secrets?: number;
+  max_kms_keys?: number;
+  max_storage_mb?: number;
+  /** @deprecated Use `max_secrets` — the server only emits the snake_case variant. */
   maxSecrets?: number;
+  /** @deprecated Use `max_kms_keys` — the server only emits the snake_case variant. */
   maxKmsKeys?: number;
+  /** @deprecated Use `max_storage_mb` — the server only emits the snake_case variant. */
   maxStorageMb?: number;
   planTier?: string;
   auditLogVisible?: boolean;
@@ -861,8 +871,10 @@ export interface Tenant {
   contactName?: string;
   metadata?: string;
   createdAt?: string;
+  created_at?: string;
   createdBy?: string;
   updatedAt?: string;
+  updated_at?: string;
   lastActivity?: string;
 }
 
@@ -910,9 +922,19 @@ export interface Role {
   name: string;
   description?: string;
   permissions: string[];
-  isSystem: boolean;
+  /** Server emits only snake_case for these fields. */
+  is_system?: boolean;
+  user_count?: number;
+  tenant_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  /** @deprecated Use `is_system` — the server only emits the snake_case variant. */
+  isSystem?: boolean;
+  /** @deprecated Use `tenant_id` — the server only emits the snake_case variant. */
   tenantId?: string;
+  /** @deprecated Use `created_at` — the server only emits the snake_case variant. */
   createdAt?: string;
+  /** @deprecated Use `updated_at` — the server only emits the snake_case variant. */
   updatedAt?: string;
 }
 
@@ -1074,23 +1096,6 @@ export interface AuditListResponse {
     failureCount: number;
     uniqueUsers: number;
   };
-}
-
-// ============================================================================
-// Health
-// ============================================================================
-
-export interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  version: string;
-  uptime: number;
-  checks?: Record<string, HealthCheck>;
-}
-
-export interface HealthCheck {
-  status: 'pass' | 'warn' | 'fail';
-  message?: string;
-  time?: number;
 }
 
 // ============================================================================
