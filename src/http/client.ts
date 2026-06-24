@@ -495,11 +495,12 @@ export class HttpClient {
             return;
           }
 
+          const bodyText = bodyBuffer.toString('utf8');
           let errorResponse: ZnVaultErrorResponse;
           try {
-            errorResponse = JSON.parse(bodyBuffer.toString('utf8')) as ZnVaultErrorResponse;
+            errorResponse = JSON.parse(bodyText) as ZnVaultErrorResponse;
           } catch {
-            errorResponse = { error: 'Unknown Error', message: bodyBuffer.toString('utf8') || 'Request failed', statusCode };
+            errorResponse = { error: 'Unknown Error', message: bodyText || 'Request failed', statusCode };
           }
           reject(this.createError(statusCode, errorResponse, res.headers));
         });

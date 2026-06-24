@@ -97,7 +97,8 @@ export class SSHCAClient {
    */
   async getCaPublicKeyRaw(tenant: string): Promise<string> {
     return this.http.get<string>(
-      `/v1/ssh/ca/${encodeURIComponent(tenant)}/public-key/raw`
+      `/v1/ssh/ca/${encodeURIComponent(tenant)}/public-key/raw`,
+      { responseType: 'text' }
     );
   }
 
@@ -235,7 +236,8 @@ export class SSHCAClient {
    */
   async getAuthorizedPrincipals(groupId: string): Promise<string> {
     return this.http.get<string>(
-      `/v1/ssh/server-groups/${encodeURIComponent(groupId)}/authorized-principals`
+      `/v1/ssh/server-groups/${encodeURIComponent(groupId)}/authorized-principals`,
+      { responseType: 'text' }
     );
   }
 
