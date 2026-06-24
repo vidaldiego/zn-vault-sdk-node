@@ -50,7 +50,7 @@ export class AuthClient {
     const response = await this.http.post<LoginResponse>('/auth/login', {
       username,
       password: request.password,
-      totp_code: request.totpCode,
+      totpCode: request.totpCode,
     });
 
     if (response.accessToken) {
@@ -114,20 +114,20 @@ export class AuthClient {
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.http.post('/auth/change-password', {
-      current_password: currentPassword,
-      new_password: newPassword,
+      currentPassword,
+      newPassword,
     });
   }
 
   async forceChangePassword(
-    username: string,
+    userId: string,
     currentPassword: string,
     newPassword: string
-  ): Promise<LoginResponse> {
-    return this.http.post<LoginResponse>('/auth/force-change-password', {
-      username,
-      current_password: currentPassword,
-      new_password: newPassword,
+  ): Promise<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/force-change-password', {
+      userId,
+      currentPassword,
+      newPassword,
     });
   }
 
@@ -229,14 +229,14 @@ export class AuthClient {
     return this.http.post<TwoFactorSetupResponse>('/auth/2fa/enable');
   }
 
-  async verify2fa(code: string): Promise<void> {
-    await this.http.post('/auth/2fa/verify', { code });
+  async verify2fa(totpCode: string): Promise<void> {
+    await this.http.post('/auth/2fa/verify', { totpCode });
   }
 
   async disable2fa(password: string, totpCode?: string): Promise<void> {
     await this.http.post('/auth/2fa/disable', {
       password,
-      totp_code: totpCode,
+      totpCode,
     });
   }
 
