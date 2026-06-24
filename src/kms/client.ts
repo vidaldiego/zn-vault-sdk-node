@@ -14,6 +14,9 @@ import type {
   ReEncryptResponse,
   KeyFilter,
   PaginatedResponse,
+  RotationStatus,
+  RotationHistoryEntry,
+  ScheduleDeletionResponse,
 } from '../types/index.js';
 
 /** Raw shape returned by the five mutation endpoints that still emit `createdAt`. */
@@ -87,9 +90,9 @@ export class KmsClient {
     return normalizeKmsKey(raw);
   }
 
-  async scheduleKeyDeletion(keyId: string, pendingWindowDays: number = 7): Promise<KmsKey> {
-    return this.http.post<KmsKey>(`/v1/kms/keys/${keyId}/schedule-deletion`, {
-      pendingWindowDays,
+  async scheduleKeyDeletion(keyId: string, pendingWindowInDays?: number): Promise<ScheduleDeletionResponse> {
+    return this.http.post<ScheduleDeletionResponse>(`/v1/kms/keys/${keyId}/schedule-deletion`, {
+      pendingWindowInDays,
     });
   }
 
@@ -105,26 +108,26 @@ export class KmsClient {
   async setRotationStatus(
     keyId: string,
     enabled: boolean,
-    periodDays?: number
-  ): Promise<KmsKey> {
-    return this.http.put<KmsKey>(`/v1/kms/keys/${keyId}/rotation-status`, {
-      rotationEnabled: enabled,
-      rotationPeriodDays: periodDays,
+    intervalDays?: number
+  ): Promise<RotationStatus> {
+    return this.http.put<RotationStatus>(`/v1/kms/keys/${keyId}/rotation-status`, {
+      enabled,
+      intervalDays,
     });
   }
 
-  async getRotationStatus(keyId: string): Promise<{
-    rotationEnabled: boolean;
-    rotationPeriodDays?: number;
-    nextRotationDate?: string;
-  }> {
-    return this.http.get(`/v1/kms/keys/${keyId}/rotation-status`);
+  async getRotationStatus(keyId: string): Promise<RotationStatus> {
+    return this.http.get<RotationStatus>(`/v1/kms/keys/${keyId}/rotation-status`);
   }
 
   async getRotationHistory(
-    keyId: string
-  ): Promise<{ versions: { versionId: string; createdAt: string }[] }> {
-    return this.http.get(`/v1/kms/keys/${keyId}/rotation-history`);
+    keyId: string,
+    limit?: number
+  ): Promise<{ history: RotationHistoryEntry[] }> {
+    const path = limit !== undefined
+      ? `/v1/kms/keys/${keyId}/rotation-history?limit=${limit}`
+      : `/v1/kms/keys/${keyId}/rotation-history`;
+    return this.http.get<{ history: RotationHistoryEntry[] }>(path);
   }
 
   // Encryption operations

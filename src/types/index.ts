@@ -750,6 +750,42 @@ export interface KeyFilter {
   offset?: number;
 }
 
+/**
+ * KMS key rotation status.
+ */
+export interface RotationStatus {
+  keyId: string;
+  rotationEnabled: boolean;
+  intervalDays?: number;
+  lastRotationDate?: string;
+  nextRotationDate?: string;
+  rotationCount: number;
+}
+
+/**
+ * A single entry in a KMS key's rotation history.
+ */
+export interface RotationHistoryEntry {
+  id: string;
+  keyId: string;
+  oldVersion: number;
+  newVersion: number;
+  rotationType: string;
+  rotationDate: string;
+  initiatedBy: string;
+  success: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Response from scheduling a KMS key for deletion.
+ */
+export interface ScheduleDeletionResponse {
+  keyId: string;
+  keyState: KeyState;
+  deletionDate: string;
+}
+
 // ============================================================================
 // Tenants
 // ============================================================================

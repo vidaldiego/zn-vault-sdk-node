@@ -149,6 +149,120 @@ describe('KmsClient key metadata contract (mocked HTTP)', () => {
   });
 });
 
+// KMS-06/07/08: rotation status/history field names + scheduleKeyDeletion body field
+describe('KmsClient rotation status/history + scheduleKeyDeletion (KMS-06/07/08)', () => {
+  let client: KmsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({ client, http } = makeClient()));
+
+  it('setRotationStatus PUT body uses { enabled, intervalDays } not { rotationEnabled, rotationPeriodDays }', async () => {
+    http.put.mockResolvedValue({
+      keyId: 'key-1',
+      rotationEnabled: true,
+      intervalDays: 90,
+      rotationCount: 0,
+    });
+    await client.setRotationStatus('key-1', true, 90);
+    const body = http.put.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).toHaveProperty('enabled', true);
+    expect(body).toHaveProperty('intervalDays', 90);
+    expect(body).not.toHaveProperty('rotationEnabled');
+    expect(body).not.toHaveProperty('rotationPeriodDays');
+  });
+
+  it('setRotationStatus returns RotationStatus shape with rotationEnabled/rotationCount', async () => {
+    const serverResponse = {
+      keyId: 'key-1',
+      rotationEnabled: true,
+      intervalDays: 90,
+      lastRotationDate: '2026-01-01T00:00:00.000Z',
+      nextRotationDate: '2026-04-01T00:00:00.000Z',
+      rotationCount: 3,
+    };
+    http.put.mockResolvedValue(serverResponse);
+    const result = await client.setRotationStatus('key-1', true, 90);
+    expect(result.keyId).toBe('key-1');
+    expect(result.rotationEnabled).toBe(true);
+    expect(result.intervalDays).toBe(90);
+    expect(result.rotationCount).toBe(3);
+    expect(result.lastRotationDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.nextRotationDate).toBe('2026-04-01T00:00:00.000Z');
+  });
+
+  it('getRotationStatus returns RotationStatus shape (not rotationPeriodDays)', async () => {
+    const serverResponse = {
+      keyId: 'key-2',
+      rotationEnabled: false,
+      intervalDays: undefined,
+      rotationCount: 0,
+    };
+    http.get.mockResolvedValue(serverResponse);
+    const result = await client.getRotationStatus('key-2');
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/key-2/rotation-status');
+    expect(result.keyId).toBe('key-2');
+    expect(result.rotationEnabled).toBe(false);
+    expect(result.rotationCount).toBe(0);
+    // Old field name must not appear
+    expect((result as Record<string, unknown>).rotationPeriodDays).toBeUndefined();
+  });
+
+  it('getRotationHistory reads response.history (not response.versions)', async () => {
+    const serverResponse = {
+      history: [
+        {
+          id: 'hist-1',
+          keyId: 'key-3',
+          oldVersion: 1,
+          newVersion: 2,
+          rotationType: 'MANUAL',
+          rotationDate: '2026-03-01T00:00:00.000Z',
+          initiatedBy: 'admin',
+          success: true,
+        },
+      ],
+    };
+    http.get.mockResolvedValue(serverResponse);
+    const result = await client.getRotationHistory('key-3');
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/key-3/rotation-history');
+    expect(result.history).toHaveLength(1);
+    const entry = result.history[0];
+    expect(entry.id).toBe('hist-1');
+    expect(entry.keyId).toBe('key-3');
+    expect(entry.oldVersion).toBe(1);
+    expect(entry.newVersion).toBe(2);
+    expect(entry.rotationType).toBe('MANUAL');
+    expect(entry.initiatedBy).toBe('admin');
+    expect(entry.success).toBe(true);
+    // Must not expose old shape
+    expect((result as Record<string, unknown>).versions).toBeUndefined();
+  });
+
+  it('getRotationHistory passes limit as query param when provided', async () => {
+    http.get.mockResolvedValue({ history: [] });
+    await client.getRotationHistory('key-4', 5);
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/key-4/rotation-history?limit=5');
+  });
+
+  it('scheduleKeyDeletion body uses pendingWindowInDays not pendingWindowDays', async () => {
+    const serverResponse = {
+      keyId: 'key-5',
+      keyState: 'PENDING_DELETION',
+      deletionDate: '2026-07-21T00:00:00.000Z',
+    };
+    http.post.mockResolvedValue(serverResponse);
+    const result = await client.scheduleKeyDeletion('key-5', 21);
+    const body = http.post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).toHaveProperty('pendingWindowInDays', 21);
+    expect(body).not.toHaveProperty('pendingWindowDays');
+    // Return type is ScheduleDeletionResponse, not KmsKey
+    expect(result.keyId).toBe('key-5');
+    expect(result.keyState).toBe('PENDING_DELETION');
+    expect(result.deletionDate).toBe('2026-07-21T00:00:00.000Z');
+    // Must not expose KmsKey-specific fields
+    expect((result as Record<string, unknown>).keySpec).toBeUndefined();
+    expect((result as Record<string, unknown>).keyUsage).toBeUndefined();
+  });
+});
+
 // Task-6 review fix: mutation endpoints emit createdAt (legacy) instead of createdDate.
 // The SDK must normalize createdAt → createdDate so callers always see createdDate.
 describe('KmsClient mutation endpoints createdAt normalization (Task-6 review)', () => {
