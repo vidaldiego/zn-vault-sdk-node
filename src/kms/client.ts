@@ -95,7 +95,13 @@ export class KmsClient {
 
     const query = params.toString();
     const path = query ? `/v1/kms/keys?${query}` : '/v1/kms/keys';
-    return this.http.get<PaginatedResponse<KmsKey>>(path);
+    // Normalize each item defensively: the list endpoint currently emits canonical
+    // names (keyId/keyUsage/createdDate), but single-key read endpoints (getKey,
+    // getKeyByAlias) emit raw names (id/usage/createdAt) due to server schema drift.
+    // Normalizing here keeps listKeys correct if the list endpoint ever drifts the
+    // same way. normalizeKmsKey is idempotent for already-canonical input.
+    const page = await this.http.get<PaginatedResponse<RawKmsKey>>(path);
+    return { ...page, items: page.items.map(normalizeKmsKey) };
   }
 
   async updateKeyDescription(keyId: string, description: string): Promise<KmsKey> {

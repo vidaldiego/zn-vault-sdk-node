@@ -105,7 +105,7 @@ describe.skipIf(!isIntegrationEnabled)('E2E: KMS — contract fixes KMS-01/03/04
     console.log(`KMS-04 usage pass: keyUsage=${key.keyUsage}`);
   });
 
-  it('KMS-04: listKeys returns items with keyState and createdDate', async () => {
+  it('KMS-04: listKeys normalizes items — canonical keyId, keyState, and createdDate are populated', async () => {
     if (serverUnreachable) return;
 
     const response = await adminClient.kms.listKeys();
@@ -114,12 +114,16 @@ describe.skipIf(!isIntegrationEnabled)('E2E: KMS — contract fixes KMS-01/03/04
     expect(response.items.length).toBeGreaterThan(0);
 
     const firstKey = response.items[0];
+    // keyState must be a valid state (present in both raw and canonical shapes)
     expect(['ENABLED', 'DISABLED', 'PENDING_DELETION']).toContain(firstKey.keyState);
+    // keyId must be canonical and non-empty (normalizeKmsKey maps raw `id` → `keyId`)
+    expect(typeof firstKey.keyId).toBe('string');
+    expect(firstKey.keyId.length).toBeGreaterThan(0);
+    // createdDate must be canonical and non-empty (normalizeKmsKey maps raw `createdAt` → `createdDate`)
+    expect(typeof firstKey.createdDate).toBe('string');
+    expect(firstKey.createdDate.length).toBeGreaterThan(0);
 
-    // listKeys returns the server shape directly (no normalizeKmsKey) — createdDate
-    // is whatever the list endpoint emits (typically createdDate already). Just confirm
-    // the keyState is correct.
-    console.log(`KMS-04 listKeys pass: count=${response.items.length}, firstKeyState=${firstKey.keyState}`);
+    console.log(`KMS-04 listKeys pass: count=${response.items.length}, firstKeyId=${firstKey.keyId}, firstKeyState=${firstKey.keyState}, createdDate=${firstKey.createdDate}`);
   });
 
   // ---------------------------------------------------------------------------

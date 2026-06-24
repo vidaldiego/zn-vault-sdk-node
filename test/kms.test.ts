@@ -140,21 +140,32 @@ describe('KmsClient key metadata contract (mocked HTTP)', () => {
     expect(result.createdDate).toBe('2026-06-24T00:00:00.000Z');
   });
 
-  it('listKeys maps items with keyState and createdDate (not state/createdAt)', async () => {
-    const listResponse = {
+  it('listKeys normalizes raw item shape (id→keyId, createdAt→createdDate)', async () => {
+    // Mock the raw item shape that the list endpoint might emit (mirrors the
+    // schema drift seen on single-key read endpoints). normalizeKmsKey must
+    // convert id→keyId and createdAt→createdDate on each item.
+    const rawListResponse = {
       items: [
-        { keyId: 'k1', alias: 'prod/key', keyState: 'ENABLED', createdDate: '2026-01-01T00:00:00.000Z' },
-        { keyId: 'k2', keyState: 'DISABLED', createdDate: '2026-02-01T00:00:00.000Z' },
+        { id: 'k1', alias: 'prod/key', keyState: 'ENABLED', createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'k2', keyState: 'DISABLED', createdAt: '2026-02-01T00:00:00.000Z' },
       ],
       pagination: { total: 2, limit: 50, offset: 0, hasMore: false },
     };
-    http.get.mockResolvedValue(listResponse);
+    http.get.mockResolvedValue(rawListResponse);
     const result = await client.listKeys({ state: 'ENABLED', limit: 10 });
     expect(http.get).toHaveBeenCalledWith('/v1/kms/keys?state=ENABLED&limit=10');
+    // Items must be normalized: raw `id` → canonical `keyId`
     expect(result.items[0].keyId).toBe('k1');
-    expect(result.items[0].keyState).toBe('ENABLED');
+    expect(result.items[1].keyId).toBe('k2');
+    // Items must be normalized: raw `createdAt` → canonical `createdDate`
     expect(result.items[0].createdDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.items[1].createdDate).toBe('2026-02-01T00:00:00.000Z');
+    // keyState passthrough (not renamed)
+    expect(result.items[0].keyState).toBe('ENABLED');
     expect(result.items[1].keyState).toBe('DISABLED');
+    // Raw field names must not leak through
+    expect((result.items[0] as Record<string, unknown>).id).toBeUndefined();
+    expect((result.items[0] as Record<string, unknown>).createdAt).toBeUndefined();
   });
 });
 
