@@ -98,6 +98,12 @@ interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
   responseType?: 'json' | 'text' | 'buffer';
+  /**
+   * Whether this request is idempotent. Only idempotent requests are retried
+   * on 5xx / network errors. GET, PUT, DELETE are idempotent; POST and PATCH
+   * are not. 429 RateLimitErrors are always retried regardless of idempotency.
+   */
+  idempotent?: boolean;
 }
 
 export class HttpClient {
@@ -421,12 +427,22 @@ export class HttpClient {
         }
 
         if (error instanceof RateLimitError) {
-          const delay = error.retryAfter ? error.retryAfter * 1000 : this.retryDelay * Math.pow(2, attempt);
+          const delay = Math.min(
+            error.retryAfter ? error.retryAfter * 1000 : this.retryDelay * Math.pow(2, attempt),
+            60_000
+          );
           await this.sleep(delay);
           continue;
         }
 
         if (error instanceof ZnVaultError && error.statusCode >= 400 && error.statusCode < 500) {
+          throw error;
+        }
+
+        // Only retry 5xx / network errors (statusCode === 0) for idempotent requests.
+        // Non-idempotent requests (POST, PATCH) must not be retried to avoid
+        // duplicate side-effects.
+        if (!options.idempotent) {
           throw error;
         }
 
@@ -557,22 +573,22 @@ export class HttpClient {
   }
 
   async get<T>(path: string, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
-    return this.request<T>({ method: 'GET', path, headers: opts?.headers, responseType: opts?.responseType });
+    return this.request<T>({ method: 'GET', path, headers: opts?.headers, responseType: opts?.responseType, idempotent: true });
   }
 
   async post<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
-    return this.request<T>({ method: 'POST', path, body, headers: opts?.headers, responseType: opts?.responseType });
+    return this.request<T>({ method: 'POST', path, body, headers: opts?.headers, responseType: opts?.responseType, idempotent: false });
   }
 
   async put<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
-    return this.request<T>({ method: 'PUT', path, body, headers: opts?.headers, responseType: opts?.responseType });
+    return this.request<T>({ method: 'PUT', path, body, headers: opts?.headers, responseType: opts?.responseType, idempotent: true });
   }
 
   async patch<T>(path: string, body?: unknown, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
-    return this.request<T>({ method: 'PATCH', path, body, headers: opts?.headers, responseType: opts?.responseType });
+    return this.request<T>({ method: 'PATCH', path, body, headers: opts?.headers, responseType: opts?.responseType, idempotent: false });
   }
 
   async delete<T>(path: string, opts?: { headers?: Record<string, string>; responseType?: 'json' | 'text' | 'buffer' }): Promise<T> {
-    return this.request<T>({ method: 'DELETE', path, headers: opts?.headers, responseType: opts?.responseType });
+    return this.request<T>({ method: 'DELETE', path, headers: opts?.headers, responseType: opts?.responseType, idempotent: true });
   }
 }
