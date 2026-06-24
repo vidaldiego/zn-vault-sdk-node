@@ -269,6 +269,51 @@ describe('MANAGEDKEY-02: setTimeout delay clamped to <= 2^31-1 ms', () => {
   });
 });
 
+describe('MANAGEDKEY-02b: chain-reschedule guard prevents premature refresh', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('clamped timer fires and reschedules (not refreshes) when Date.now() < targetAt', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-01-01T00:00:00Z');
+    vi.setSystemTime(now);
+
+    const client = makeManagedClient();
+    const priv = client as unknown as ClientPrivate;
+
+    // 60 days in the future — true delay well over MAX_TIMER_DELAY (~24.8 days)
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+    priv.managedKeyState.nextRotationAt = new Date(now.getTime() + sixtyDaysMs);
+    priv.managedKeyState.refreshBeforeExpiryMs = 0;
+
+    // Spy on bindManagedKeyInternal — must NOT be called during a clamped-timer fire
+    const bindSpy = vi.spyOn(priv, 'bindManagedKeyInternal');
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    // Start scheduling
+    priv.scheduleManagedKeyRefresh();
+
+    // After the first scheduleManagedKeyRefresh call, setTimeout was called once (clamped)
+    const callsAfterFirst = setTimeoutSpy.mock.calls.length;
+    expect(callsAfterFirst).toBeGreaterThanOrEqual(1);
+
+    // Do NOT advance system time — wall clock stays at `now`, far before targetAt.
+    // Advance fake timers by MAX_TIMER_DELAY so the clamped timer fires.
+    await vi.advanceTimersByTimeAsync(2_147_483_647);
+
+    // The guard `if (Date.now() < targetAt)` should have caused a re-call to
+    // scheduleManagedKeyRefresh(), which in turn calls setTimeout again.
+    const callsAfterFire = setTimeoutSpy.mock.calls.length;
+    expect(callsAfterFire).toBeGreaterThan(callsAfterFirst);
+
+    // bindManagedKeyInternal must NOT have been called — no premature refresh
+    expect(bindSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('MANAGEDKEY-01: concurrent refreshManagedKey() shares one in-flight bind', () => {
   afterEach(() => {
     vi.restoreAllMocks();

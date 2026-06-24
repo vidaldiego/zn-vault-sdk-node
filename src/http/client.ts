@@ -271,6 +271,9 @@ export class HttpClient {
       clearTimeout(this.managedKeyState.refreshTimer);
     }
     this.managedKeyState = undefined;
+    // Clear any in-flight bind promise so a subsequent initManagedKey() starts fresh
+    // rather than reusing the stale promise from the previous session (MANAGEDKEY-01).
+    this.refreshInFlight = undefined;
   }
 
   /**
