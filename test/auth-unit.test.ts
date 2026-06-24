@@ -1,5 +1,5 @@
 // Path: zn-vault-sdk-node/test/auth-unit.test.ts
-// Unit tests for AuthClient field-name contracts (AUTH-01..05).
+// Unit tests for AuthClient field-name contracts (AUTH-01..09).
 // Uses a mocked HttpClient — no live server required.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -140,5 +140,145 @@ describe('AuthClient field-name contracts (mocked HTTP)', () => {
     const body = http.post.mock.calls[0][1] as Record<string, unknown>;
     expect(body).toHaveProperty('password', 'pass');
     expect(body).not.toHaveProperty('totp_code');
+  });
+
+  // AUTH-06: getApiKey returns the bare object (server returns apiKey directly, not wrapped in { apiKey })
+  it('AUTH-06: getApiKey returns the bare response object directly', async () => {
+    const fakeKey = {
+      id: 'key_123',
+      name: 'test-key',
+      tenant_id: 'acme',
+      created_by: 'user_1',
+      created_at: '2026-01-01T00:00:00.000Z',
+      expires_at: '2026-04-01T00:00:00.000Z',
+      prefix: 'znv_abcd',
+      permissions: ['secret:read:metadata'],
+      ip_allowlist: [],
+      enabled: true,
+      rotation_count: 0,
+      last_rotation: null,
+      is_managed: false,
+      rotation_mode: null,
+      rotation_interval_seconds: null,
+      grace_period_seconds: 300,
+      next_rotation_at: null,
+      late_pickup_enabled: false,
+      late_pickup_window_seconds: 0,
+    };
+    http.get.mockResolvedValue(fakeKey);
+    const result = await client.getApiKey('key_123');
+    // Must return the bare object, not result.apiKey
+    expect(result).toBe(fakeKey);
+    expect(result.id).toBe('key_123');
+    expect(result.tenant_id).toBe('acme');
+  });
+
+  // AUTH-06: getApiKey does NOT unwrap an apiKey property
+  it('AUTH-06: getApiKey does not return response.apiKey wrapper', async () => {
+    const fakeKey = { id: 'key_abc', name: 'my-key', tenant_id: 'acme', permissions: [] };
+    http.get.mockResolvedValue(fakeKey);
+    const result = await client.getApiKey('key_abc');
+    // If old code were used, result would be undefined (fakeKey has no .apiKey property)
+    expect(result).not.toBeUndefined();
+    expect(result.id).toBe('key_abc');
+  });
+
+  // AUTH-07: createManagedApiKey POSTs to /auth/api-keys (NOT /auth/api-keys/managed)
+  it('AUTH-07: createManagedApiKey POSTs to /auth/api-keys', async () => {
+    http.post.mockResolvedValue({
+      apiKey: { id: 'key_managed', name: 'my-managed', is_managed: true, permissions: [] },
+      message: 'Managed API key created.',
+    });
+    await client.createManagedApiKey({
+      name: 'my-managed',
+      permissions: ['secret:read:metadata'],
+      rotationMode: 'scheduled',
+      rotationInterval: '24h',
+      gracePeriod: '5m',
+    });
+    const [path] = http.post.mock.calls[0];
+    expect(path).toBe('/auth/api-keys');
+  });
+
+  // AUTH-07: createManagedApiKey sends managed config as nested managed object
+  it('AUTH-07: createManagedApiKey sends nested managed object', async () => {
+    http.post.mockResolvedValue({
+      apiKey: { id: 'key_managed', name: 'my-managed', is_managed: true, permissions: [] },
+      message: 'Managed API key created.',
+    });
+    await client.createManagedApiKey({
+      name: 'my-managed',
+      permissions: ['secret:read:metadata'],
+      rotationMode: 'on-use',
+      gracePeriod: '10m',
+      description: 'A managed key',
+    });
+    const body = http.post.mock.calls[0][1] as Record<string, unknown>;
+    // Top-level fields
+    expect(body.name).toBe('my-managed');
+    expect(body.permissions).toEqual(['secret:read:metadata']);
+    expect(body.description).toBe('A managed key');
+    // Rotation config must be in nested managed object
+    expect(body).toHaveProperty('managed');
+    const managed = body.managed as Record<string, unknown>;
+    expect(managed.rotationMode).toBe('on-use');
+    expect(managed.gracePeriod).toBe('10m');
+    // Must NOT have rotationMode at the top level
+    expect(body).not.toHaveProperty('rotationMode');
+    expect(body).not.toHaveProperty('gracePeriod');
+  });
+
+  // AUTH-08: rotateApiKey sends { name } only — no expiresInDays
+  it('AUTH-08: rotateApiKey sends name-only body (no expiresInDays)', async () => {
+    http.post.mockResolvedValue({
+      key: 'znv_newkey123',
+      apiKey: { id: 'key_123', name: 'renamed-key', permissions: [] },
+      message: 'Save this key',
+    });
+    await client.rotateApiKey('key_123', 'renamed-key');
+    const body = http.post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).toHaveProperty('name', 'renamed-key');
+    expect(body).not.toHaveProperty('expiresInDays');
+  });
+
+  // AUTH-08: rotateApiKey without name sends empty/undefined name
+  it('AUTH-08: rotateApiKey without name sends no expiresInDays', async () => {
+    http.post.mockResolvedValue({
+      key: 'znv_newkey456',
+      apiKey: { id: 'key_123', name: 'my-key', permissions: [] },
+      message: 'Save this key',
+    });
+    await client.rotateApiKey('key_123');
+    const [path, body] = http.post.mock.calls[0] as [string, Record<string, unknown>];
+    expect(path).toBe('/auth/api-keys/key_123/rotate');
+    expect(body).not.toHaveProperty('expiresInDays');
+  });
+
+  // AUTH-09: rotateCurrentApiKey sends { name } only — no expiresInDays
+  it('AUTH-09: rotateCurrentApiKey sends name-only body (no expiresInDays)', async () => {
+    http.post.mockResolvedValue({
+      key: 'znv_selfnew123',
+      apiKey: { id: 'key_self', name: 'self-key', permissions: [] },
+      expiresInDays: 90,
+      message: 'Save this key',
+    });
+    await client.rotateCurrentApiKey('new-name');
+    const body = http.post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).toHaveProperty('name', 'new-name');
+    expect(body).not.toHaveProperty('expiresInDays');
+  });
+
+  // AUTH-09: rotateCurrentApiKey without name sends no expiresInDays
+  it('AUTH-09: rotateCurrentApiKey without name does not send expiresInDays', async () => {
+    http.post.mockResolvedValue({
+      key: 'znv_selfnew456',
+      apiKey: { id: 'key_self', name: 'self-key', permissions: [] },
+      expiresInDays: 90,
+      message: 'Save this key',
+    });
+    await client.rotateCurrentApiKey();
+    const [path, body] = http.post.mock.calls[0] as [string, Record<string, unknown>];
+    expect(path).toBe('/auth/api-keys/self/rotate');
+    expect(body).not.toHaveProperty('expiresInDays');
   });
 });

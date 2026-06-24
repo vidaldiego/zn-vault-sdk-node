@@ -125,23 +125,36 @@ export interface CreateApiKeyRequest {
 
 /**
  * API key metadata.
+ * Fields use snake_case to match the server's toPublic() output exactly.
  */
 export interface ApiKey {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   prefix?: string;
-  tenantId?: string;
-  createdBy?: string;
-  createdAt?: string;
-  expiresAt?: string;
-  lastUsed?: string;
+  tenant_id?: string;
+  created_by?: string | null;
+  created_at?: string;
+  expires_at?: string;
+  last_used?: string | null;
   permissions?: string[];
-  ipAllowlist?: string[];
+  ip_allowlist?: string[];
   conditions?: ApiKeyConditions;
   enabled?: boolean;
-  rotationCount?: number;
-  lastRotation?: string;
+  rotation_count?: number;
+  last_rotation?: string | null;
+  // Managed key fields
+  is_managed?: boolean;
+  rotation_mode?: string | null;
+  rotation_interval_seconds?: number | null;
+  grace_period_seconds?: number;
+  next_rotation_at?: string | null;
+  rotation_paused?: boolean | null;
+  // Late pickup fields
+  late_pickup_enabled?: boolean | null;
+  late_pickup_window_seconds?: number | null;
+  late_pickup_max_attempts?: number | null;
+  late_pickup_require_same_ip?: boolean | null;
 }
 
 /**
@@ -157,10 +170,11 @@ export interface CreateApiKeyResponse {
 
 /**
  * Request to rotate an API key.
+ * The server only accepts an optional new name; expiration is not configurable at rotation time.
  */
 export interface RotateApiKeyRequest {
-  /** New expiration in days (optional, keeps current if not specified) */
-  expiresInDays?: number;
+  /** Optional new name for the rotated key */
+  name?: string;
 }
 
 // ============================================================================
@@ -215,6 +229,10 @@ export interface CreateManagedApiKeyRequest {
   rotationInterval?: string;
   /** Grace period for smooth key transitions (e.g., "5m") */
   gracePeriod?: string;
+  /** Send notification before rotation (e.g., "1h") */
+  notifyBefore?: string;
+  /** URL to POST rotation event notifications */
+  webhookUrl?: string;
   /** Optional description */
   description?: string;
   /** Expiration in days (optional) */

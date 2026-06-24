@@ -170,12 +170,13 @@ export class AuthClient {
   /**
    * Get a specific API key by ID.
    *
+   * The server returns the bare public key object directly (not wrapped in { apiKey }).
+   *
    * @param id - The API key ID
    * @returns The API key metadata
    */
   async getApiKey(id: string): Promise<ApiKey> {
-    const response = await this.http.get<{ apiKey: ApiKey }>(`/auth/api-keys/${id}`);
-    return response.apiKey;
+    return this.http.get<ApiKey>(`/auth/api-keys/${id}`);
   }
 
   /**
@@ -191,12 +192,12 @@ export class AuthClient {
    * Rotate an API key, generating a new key value.
    *
    * @param id - The API key ID to rotate
-   * @param expiresInDays - Optional new expiration period
+   * @param name - Optional new name for the rotated key
    * @returns The rotated API key with new key value
    */
-  async rotateApiKey(id: string, expiresInDays?: number): Promise<CreateApiKeyResponse> {
+  async rotateApiKey(id: string, name?: string): Promise<CreateApiKeyResponse> {
     return this.http.post<CreateApiKeyResponse>(`/auth/api-keys/${id}/rotate`, {
-      expiresInDays,
+      name,
     });
   }
 
@@ -215,12 +216,12 @@ export class AuthClient {
    * Rotate the currently authenticated API key.
    * Only works when authenticated via API key.
    *
-   * @param expiresInDays - Optional new expiration period
+   * @param name - Optional new name for the rotated key
    * @returns The rotated API key with new key value
    */
-  async rotateCurrentApiKey(expiresInDays?: number): Promise<CreateApiKeyResponse> {
+  async rotateCurrentApiKey(name?: string): Promise<CreateApiKeyResponse> {
     return this.http.post<CreateApiKeyResponse>('/auth/api-keys/self/rotate', {
-      expiresInDays,
+      name,
     });
   }
 
@@ -255,16 +256,23 @@ export class AuthClient {
   /**
    * Create a managed API key with auto-rotation configuration in the
    * caller's tenant.
+   *
+   * Managed keys are created via POST /auth/api-keys with a nested `managed`
+   * object — there is no separate /auth/api-keys/managed create endpoint.
    */
   async createManagedApiKey(request: CreateManagedApiKeyRequest): Promise<CreateManagedApiKeyResponse> {
-    return this.http.post<CreateManagedApiKeyResponse>('/auth/api-keys/managed', {
+    return this.http.post<CreateManagedApiKeyResponse>('/auth/api-keys', {
       name: request.name,
       permissions: request.permissions,
-      rotationMode: request.rotationMode,
-      rotationInterval: request.rotationInterval,
-      gracePeriod: request.gracePeriod,
       description: request.description,
       expiresInDays: request.expiresInDays,
+      managed: {
+        rotationMode: request.rotationMode,
+        rotationInterval: request.rotationInterval,
+        gracePeriod: request.gracePeriod,
+        notifyBefore: request.notifyBefore,
+        webhookUrl: request.webhookUrl,
+      },
     });
   }
 
