@@ -228,6 +228,46 @@ describe('AuthClient field-name contracts (mocked HTTP)', () => {
     expect(body).not.toHaveProperty('gracePeriod');
   });
 
+  // AUTH-07b: createManagedApiKey response uses snake_case ApiKey shape (FIX 3)
+  it('AUTH-07b: createManagedApiKey response.apiKey uses snake_case fields', async () => {
+    const mockResponse = {
+      key: 'znv_managed123',
+      apiKey: {
+        id: 'key_managed_456',
+        name: 'my-managed-key',
+        tenant_id: 'acme',
+        is_managed: true,
+        rotation_mode: 'scheduled' as const,
+        rotation_interval_seconds: 86400,
+        grace_period_seconds: 300,
+        first_used_at: null,
+        grace_expires_at: null,
+        rotation_webhook_url: 'https://example.com/webhook',
+        created_by_username: 'alice',
+        permissions: ['secret:read:metadata'],
+        enabled: true,
+      },
+      message: 'Managed API key created. Use POST /auth/api-keys/managed/my-managed-key/bind to retrieve the key value.',
+    };
+    http.post.mockResolvedValue(mockResponse);
+    const result = await client.createManagedApiKey({
+      name: 'my-managed-key',
+      permissions: ['secret:read:metadata'],
+      rotationMode: 'scheduled',
+      rotationInterval: '24h',
+    });
+    // The apiKey shape must be snake_case (ApiKey), not camelCase (ManagedApiKey)
+    expect(result.apiKey.rotation_mode).toBe('scheduled');
+    expect(result.apiKey.is_managed).toBe(true);
+    expect(result.apiKey.rotation_webhook_url).toBe('https://example.com/webhook');
+    expect(result.apiKey.created_by_username).toBe('alice');
+    expect(result.apiKey.grace_expires_at).toBeNull();
+    expect(result.apiKey.first_used_at).toBeNull();
+    // Must NOT be reading camelCase ManagedApiKey fields
+    expect((result.apiKey as Record<string, unknown>)['rotationMode']).toBeUndefined();
+    expect((result.apiKey as Record<string, unknown>)['tenantId']).toBeUndefined();
+  });
+
   // AUTH-08: rotateApiKey sends { name } only — no expiresInDays
   it('AUTH-08: rotateApiKey sends name-only body (no expiresInDays)', async () => {
     http.post.mockResolvedValue({

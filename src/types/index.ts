@@ -134,6 +134,8 @@ export interface ApiKey {
   prefix?: string;
   tenant_id?: string;
   created_by?: string | null;
+  /** Username of the user who created the key (present on list and get-by-id responses). */
+  created_by_username?: string | null;
   created_at?: string;
   expires_at?: string;
   last_used?: string | null;
@@ -148,7 +150,13 @@ export interface ApiKey {
   rotation_mode?: string | null;
   rotation_interval_seconds?: number | null;
   grace_period_seconds?: number;
+  /** When the key was first used (for on-use rotation mode). */
+  first_used_at?: string | null;
+  /** When the grace period expires after a rotation. */
+  grace_expires_at?: string | null;
   next_rotation_at?: string | null;
+  /** URL that receives rotation event webhook notifications. */
+  rotation_webhook_url?: string | null;
   rotation_paused?: boolean | null;
   // Late pickup fields
   late_pickup_enabled?: boolean | null;
@@ -241,10 +249,12 @@ export interface CreateManagedApiKeyRequest {
 
 /**
  * Response from creating a managed API key.
+ * The server returns toPublic() output (snake_case ApiKey shape), not the
+ * camelCase ManagedApiKey shape.
  */
 export interface CreateManagedApiKeyResponse {
-  /** The managed key metadata */
-  apiKey: ManagedApiKey;
+  /** The managed key metadata (snake_case ApiKey from toPublic()) */
+  apiKey: ApiKey;
   message?: string;
 }
 
