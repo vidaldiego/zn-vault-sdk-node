@@ -362,53 +362,52 @@ const key = await client.kms.createKey({
   description: 'Production encryption key',
   usage: 'ENCRYPT_DECRYPT',
   keySpec: 'AES_256',
-  tenantId: 'acme'
 });
 
 // Encrypt data (convenience helper — returns the ciphertext string directly)
-const ciphertext = await client.kms.encryptString(key.id, 'sensitive data');
+const ciphertext = await client.kms.encryptString(key.keyId, 'sensitive data');
 // or with encryption context (recommended)
-const ciphertext = await client.kms.encryptString(key.id, 'sensitive data', {
+const ciphertext = await client.kms.encryptString(key.keyId, 'sensitive data', {
   app: 'my-service'
 });
 
 // Decrypt data (context must match what was used to encrypt)
-const decrypted = await client.kms.decryptString(key.id, ciphertext, {
+const decrypted = await client.kms.decryptString(key.keyId, ciphertext, {
   app: 'my-service'
 });
 
 // Low-level: encrypt/decrypt using the raw EncryptRequest shape
 const encResult = await client.kms.encrypt({
-  keyId: key.id,
+  keyId: key.keyId,
   plaintext: Buffer.from('hello').toString('base64'),
   context: { purpose: 'backup' },
 });
 // encResult.ciphertext — base64-encoded ciphertext
 const decResult = await client.kms.decrypt({
-  keyId: key.id,
+  keyId: key.keyId,
   ciphertext: encResult.ciphertext,
   context: { purpose: 'backup' },
 });
 // decResult.plaintext — base64-encoded plaintext
 
 // Encrypt/decrypt binary data (context is optional, defaults to {})
-const encryptedBuffer = await client.kms.encryptBuffer(key.id, buffer);
-const decryptedBuffer = await client.kms.decryptBuffer(key.id, encryptedBuffer);
+const encryptedBuffer = await client.kms.encryptBuffer(key.keyId, buffer);
+const decryptedBuffer = await client.kms.decryptBuffer(key.keyId, encryptedBuffer);
 
 // Generate data key (for envelope encryption)
-const dataKey = await client.kms.generateDataKey(key.id, 'AES_256');
+const dataKey = await client.kms.generateDataKey(key.keyId, 'AES_256');
 // dataKey.plaintext - use for encryption, then discard
 // dataKey.ciphertext - store alongside encrypted data
 
 // Rotate key
-await client.kms.rotateKey(key.id);
+await client.kms.rotateKey(key.keyId);
 
 // Enable/disable key
-await client.kms.disableKey(key.id);
-await client.kms.enableKey(key.id);
+await client.kms.disableKey(key.keyId);
+await client.kms.enableKey(key.keyId);
 
 // Schedule deletion
-await client.kms.scheduleKeyDeletion(key.id, 7); // 7 days pending window
+await client.kms.scheduleKeyDeletion(key.keyId, 7); // 7 days pending window
 ```
 
 ## SSH Certificate Authority

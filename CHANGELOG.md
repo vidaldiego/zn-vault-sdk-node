@@ -46,10 +46,11 @@ those calls produced errors on any real server anyway.
   (`client_cn`, `start_date`, `end_date`) matching the server contract.
   `tenantId`, `page`, and `pageSize` are no longer part of `AuditFilter`
   (AUDIT-01..04).
-- **Audit entry shapes** — `AuditEntry` now has `clientCn` (not
-  `client_cn`), a correct timestamp type, and no phantom `stats` field on
-  `AuditListResponse`. `exportLogs` is typed as `RawAuditEntry[]`
-  (snake_case, matching the export endpoint's raw rows).
+- **Audit entry shapes** — `AuditEntry` uses camelCase response fields
+  (`actor`, `clientCert`, `result`) matching the server. A correct timestamp
+  type is used, and the phantom `stats` field on `AuditListResponse` has been
+  removed. `exportLogs` is typed as `RawAuditEntry[]` (snake_case, matching
+  the export endpoint's raw rows).
 - **Health status enums** — `HealthStatus.status` is `'ok' | 'degraded' |
   'error'` (was `'healthy' | 'degraded' | 'unhealthy'`). `ReadinessStatus`
   is `'ready' | 'not ready' | 'degraded'`. `checks` now has typed `db` and
@@ -80,8 +81,11 @@ those calls produced errors on any real server anyway.
   OpenSSH KRL without corruption (BINARY-01).
 - **`RawAuditEntry` type** — exported from the package for consumers who
   process raw `exportLogs()` rows directly.
-- **CI workflow** (`.github/workflows/publish.yml`) — runs typecheck, lint,
-  unit tests, and publishes to npm on version tags (PKG-01).
+- **CI workflow** (`.github/workflows/ci.yml`) — PR- and main-branch-triggered
+  quality gate (typecheck, lint, build, unit tests) plus a Docker E2E job that
+  boots a real vault instance and runs the full E2E suite (PKG-01). The
+  pre-existing `publish.yml` handles npm publishing on version tags and was not
+  changed.
 
 ### Fixed
 
