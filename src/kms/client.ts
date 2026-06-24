@@ -16,6 +16,21 @@ import type {
   PaginatedResponse,
 } from '../types/index.js';
 
+/** Raw shape returned by the five mutation endpoints that still emit `createdAt`. */
+type RawKmsKey = Omit<KmsKey, 'createdDate'> & { createdDate?: string; createdAt?: string };
+
+/**
+ * Shields callers from the server inconsistency where mutation endpoints
+ * (`updateKeyDescription`, `updateKeyAlias`, `enableKey`, `disableKey`,
+ * `cancelKeyDeletion`) return `createdAt` instead of `createdDate`.
+ * Read endpoints (`getKey`, `getKeyByAlias`, `listKeys`, `createKey`) already
+ * emit `createdDate` and are not passed through this helper.
+ */
+function normalizeKmsKey(raw: RawKmsKey): KmsKey {
+  const { createdAt, createdDate, ...rest } = raw;
+  return { ...rest, createdDate: createdDate ?? createdAt ?? '' };
+}
+
 export class KmsClient {
   constructor(private http: HttpClient) {}
 
@@ -53,19 +68,23 @@ export class KmsClient {
   }
 
   async updateKeyDescription(keyId: string, description: string): Promise<KmsKey> {
-    return this.http.put<KmsKey>(`/v1/kms/keys/${keyId}/description`, { description });
+    const raw = await this.http.put<RawKmsKey>(`/v1/kms/keys/${keyId}/description`, { description });
+    return normalizeKmsKey(raw);
   }
 
   async updateKeyAlias(keyId: string, alias: string): Promise<KmsKey> {
-    return this.http.put<KmsKey>(`/v1/kms/keys/${keyId}/alias`, { alias });
+    const raw = await this.http.put<RawKmsKey>(`/v1/kms/keys/${keyId}/alias`, { alias });
+    return normalizeKmsKey(raw);
   }
 
   async enableKey(keyId: string): Promise<KmsKey> {
-    return this.http.post<KmsKey>(`/v1/kms/keys/${keyId}/enable`);
+    const raw = await this.http.post<RawKmsKey>(`/v1/kms/keys/${keyId}/enable`);
+    return normalizeKmsKey(raw);
   }
 
   async disableKey(keyId: string): Promise<KmsKey> {
-    return this.http.post<KmsKey>(`/v1/kms/keys/${keyId}/disable`);
+    const raw = await this.http.post<RawKmsKey>(`/v1/kms/keys/${keyId}/disable`);
+    return normalizeKmsKey(raw);
   }
 
   async scheduleKeyDeletion(keyId: string, pendingWindowDays: number = 7): Promise<KmsKey> {
@@ -75,7 +94,8 @@ export class KmsClient {
   }
 
   async cancelKeyDeletion(keyId: string): Promise<KmsKey> {
-    return this.http.post<KmsKey>(`/v1/kms/keys/${keyId}/cancel-deletion`);
+    const raw = await this.http.post<RawKmsKey>(`/v1/kms/keys/${keyId}/cancel-deletion`);
+    return normalizeKmsKey(raw);
   }
 
   async rotateKey(keyId: string): Promise<KmsKey> {

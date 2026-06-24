@@ -148,3 +148,37 @@ describe('KmsClient key metadata contract (mocked HTTP)', () => {
     expect(result.items[1].keyState).toBe('DISABLED');
   });
 });
+
+// Task-6 review fix: mutation endpoints emit createdAt (legacy) instead of createdDate.
+// The SDK must normalize createdAt → createdDate so callers always see createdDate.
+describe('KmsClient mutation endpoints createdAt normalization (Task-6 review)', () => {
+  let client: KmsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({ client, http } = makeClient()));
+
+  it('enableKey: server response with createdAt (no createdDate) is normalized to createdDate', async () => {
+    // Simulate the legacy server shape returned by mutation endpoints.
+    const legacyServerResponse = {
+      keyId: 'key-uuid-42',
+      alias: 'billing/key',
+      arn: 'arn:zn-vault:kms:us-east-1:acme:key/key-uuid-42',
+      // Server emits `createdAt`, NOT `createdDate`
+      createdAt: '2026-06-24T10:00:00.000Z',
+      keyState: 'ENABLED',
+      keyUsage: 'ENCRYPT_DECRYPT',
+      keySpec: 'AES_256',
+      multiRegion: false,
+      origin: 'ZN_VAULT',
+    };
+    http.post.mockResolvedValue(legacyServerResponse);
+
+    const key = await client.enableKey('key-uuid-42');
+
+    // The normalized result must expose createdDate populated from createdAt
+    expect(key.createdDate).toBe('2026-06-24T10:00:00.000Z');
+    // The stray createdAt field must not leak through to the caller
+    expect((key as Record<string, unknown>).createdAt).toBeUndefined();
+    // Other fields are preserved
+    expect(key.keyId).toBe('key-uuid-42');
+    expect(key.keyState).toBe('ENABLED');
+  });
+});
