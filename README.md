@@ -382,7 +382,7 @@ const decryptedBuffer = await client.kms.decryptBuffer(key.id, encryptedBuffer);
 // Generate data key (for envelope encryption)
 const dataKey = await client.kms.generateDataKey(key.id, 'AES_256');
 // dataKey.plaintext - use for encryption, then discard
-// dataKey.ciphertextBlob - store alongside encrypted data
+// dataKey.ciphertext - store alongside encrypted data
 
 // Rotate key
 await client.kms.rotateKey(key.id);

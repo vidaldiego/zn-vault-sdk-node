@@ -695,36 +695,52 @@ export interface CreateKeyRequest {
 export interface EncryptRequest {
   keyId: string;
   plaintext: string;
-  context?: Record<string, string>;
+  context: Record<string, string>;
 }
 
 export interface EncryptResponse {
-  ciphertextBlob: string;
+  ciphertext: string;
   keyId: string;
-  keyVersionId?: string;
+  encryptionContext?: Record<string, string>;
 }
 
 export interface DecryptRequest {
-  keyId: string;
-  ciphertextBlob: string;
-  context?: Record<string, string>;
+  keyId?: string;
+  ciphertext: string;
+  context: Record<string, string>;
 }
 
 export interface DecryptResponse {
   plaintext: string;
   keyId: string;
+  encryptionContext?: Record<string, string>;
 }
 
 export interface GenerateDataKeyRequest {
   keyId: string;
   keySpec?: 'AES_256' | 'AES_128';
-  context?: Record<string, string>;
+  numberOfBytes?: number;
+  context: Record<string, string>;
 }
 
 export interface GenerateDataKeyResponse {
   plaintext: string;
-  ciphertextBlob: string;
+  ciphertext: string;
   keyId: string;
+}
+
+export interface ReEncryptRequest {
+  ciphertext: string;
+  sourceKeyId?: string;
+  sourceContext: Record<string, string>;
+  destinationKeyId: string;
+  destinationContext: Record<string, string>;
+}
+
+export interface ReEncryptResponse {
+  sourceKeyId: string;
+  destinationKeyId: string;
+  ciphertext: string;
 }
 
 export interface KeyFilter {

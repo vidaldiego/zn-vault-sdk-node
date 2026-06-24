@@ -10,6 +10,8 @@ import type {
   DecryptResponse,
   GenerateDataKeyRequest,
   GenerateDataKeyResponse,
+  ReEncryptRequest,
+  ReEncryptResponse,
   KeyFilter,
   PaginatedResponse,
 } from '../types/index.js';
@@ -114,24 +116,18 @@ export class KmsClient {
   async decrypt(request: DecryptRequest): Promise<DecryptResponse> {
     return this.http.post<DecryptResponse>('/v1/kms/decrypt', {
       keyId: request.keyId,
-      ciphertextBlob: request.ciphertextBlob,
+      ciphertext: request.ciphertext,
       context: request.context,
     });
   }
 
-  async reEncrypt(
-    keyId: string,
-    ciphertextBlob: string,
-    destinationKeyId: string,
-    sourceContext?: Record<string, string>,
-    destinationContext?: Record<string, string>
-  ): Promise<EncryptResponse> {
-    return this.http.post<EncryptResponse>('/v1/kms/re-encrypt', {
-      keyId,
-      ciphertextBlob,
-      destinationKeyId,
-      sourceContext,
-      destinationContext,
+  async reEncrypt(request: ReEncryptRequest): Promise<ReEncryptResponse> {
+    return this.http.post<ReEncryptResponse>('/v1/kms/re-encrypt', {
+      ciphertext: request.ciphertext,
+      sourceKeyId: request.sourceKeyId,
+      sourceContext: request.sourceContext,
+      destinationKeyId: request.destinationKeyId,
+      destinationContext: request.destinationContext,
     });
   }
 
@@ -139,16 +135,18 @@ export class KmsClient {
     return this.http.post<GenerateDataKeyResponse>('/v1/kms/generate-data-key', {
       keyId: request.keyId,
       keySpec: request.keySpec ?? 'AES_256',
+      numberOfBytes: request.numberOfBytes,
       context: request.context,
     });
   }
 
   async generateDataKeyWithoutPlaintext(
     request: GenerateDataKeyRequest
-  ): Promise<{ ciphertextBlob: string; keyId: string }> {
+  ): Promise<{ ciphertext: string; keyId: string }> {
     return this.http.post('/v1/kms/generate-data-key-without-plaintext', {
       keyId: request.keyId,
       keySpec: request.keySpec ?? 'AES_256',
+      numberOfBytes: request.numberOfBytes,
       context: request.context,
     });
   }
@@ -156,12 +154,12 @@ export class KmsClient {
   // Convenience methods for string encryption
   async encryptString(keyId: string, plaintext: string, context?: Record<string, string>): Promise<string> {
     const base64 = Buffer.from(plaintext).toString('base64');
-    const response = await this.encrypt({ keyId, plaintext: base64, context });
-    return response.ciphertextBlob;
+    const response = await this.encrypt({ keyId, plaintext: base64, context: context ?? {} });
+    return response.ciphertext;
   }
 
-  async decryptString(keyId: string, ciphertextBlob: string, context?: Record<string, string>): Promise<string> {
-    const response = await this.decrypt({ keyId, ciphertextBlob, context });
+  async decryptString(keyId: string, ciphertext: string, context?: Record<string, string>): Promise<string> {
+    const response = await this.decrypt({ keyId, ciphertext, context: context ?? {} });
     return Buffer.from(response.plaintext, 'base64').toString('utf-8');
   }
 
@@ -170,16 +168,16 @@ export class KmsClient {
     const response = await this.encrypt({
       keyId,
       plaintext: data.toString('base64'),
-      context,
+      context: context ?? {},
     });
-    return Buffer.from(response.ciphertextBlob, 'base64');
+    return Buffer.from(response.ciphertext, 'base64');
   }
 
-  async decryptBuffer(keyId: string, ciphertextBlob: Buffer, context?: Record<string, string>): Promise<Buffer> {
+  async decryptBuffer(keyId: string, ciphertext: Buffer, context?: Record<string, string>): Promise<Buffer> {
     const response = await this.decrypt({
       keyId,
-      ciphertextBlob: ciphertextBlob.toString('base64'),
-      context,
+      ciphertext: ciphertext.toString('base64'),
+      context: context ?? {},
     });
     return Buffer.from(response.plaintext, 'base64');
   }
