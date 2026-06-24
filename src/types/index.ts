@@ -1002,6 +1002,32 @@ export interface AuditEntry {
   metadata?: Record<string, unknown> | null;
 }
 
+/**
+ * Raw audit log row as emitted by the export endpoint (`GET /v1/audit/export`
+ * with `format=json`). This is the untransformed DB row shape — snake_case
+ * field names, `ts` instead of `timestamp`, `client_cn` instead of
+ * `clientCert`/`actor` — and is distinct from the camelCase-transformed
+ * `AuditEntry` shape returned by the list route.
+ */
+export interface RawAuditEntry {
+  /** Optional numeric primary key (may be absent on some rows). */
+  id?: number;
+  /** ISO 8601 timestamp of the audit event. */
+  ts: string;
+  /** Client common name (user/API-key identifier), or null for system events. */
+  client_cn: string | null;
+  /** Action that was performed (e.g. "secret.read"). */
+  action: string;
+  /** Resource path the action targeted. */
+  resource: string;
+  /** Outcome of the action — free-form string (e.g. "success", "failure"). */
+  result: string;
+  /** Client IP address. */
+  ip: string;
+  /** Optional structured metadata attached to the event. */
+  metadata?: Record<string, unknown>;
+}
+
 export interface AuditFilter {
   /** Filter by client CN (maps to query param client_cn) */
   clientCn?: string;

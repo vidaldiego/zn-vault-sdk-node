@@ -2,11 +2,11 @@
 
 import type { HttpClient } from '../http/client.js';
 import type {
-  AuditEntry,
   AuditFilter,
   AuditListResponse,
   AuditStats,
   AuditVerifyResult,
+  RawAuditEntry,
 } from '../types/index.js';
 
 export class AuditClient {
@@ -44,11 +44,12 @@ export class AuditClient {
 
   /**
    * Export audit logs as a JSON array or CSV.
-   * Returns the bare array of entries (JSON) or a CSV string.
+   * Returns raw audit rows as emitted by the export endpoint (snake_case,
+   * untransformed) — distinct from list()'s transformed AuditEntry shape.
    *
    * Note: the server returns a bare JSON array (not wrapped in an object).
    */
-  async exportLogs(filter?: AuditFilter): Promise<AuditEntry[]> {
+  async exportLogs(filter?: AuditFilter): Promise<RawAuditEntry[]> {
     const params = new URLSearchParams();
     if (filter?.format) params.set('format', filter.format);
     if (filter?.clientCn) params.set('client_cn', filter.clientCn);
@@ -58,7 +59,7 @@ export class AuditClient {
 
     const query = params.toString();
     const path = query ? `/v1/audit/export?${query}` : '/v1/audit/export';
-    return this.http.get<AuditEntry[]>(path);
+    return this.http.get<RawAuditEntry[]>(path);
   }
 
   /**

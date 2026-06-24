@@ -80,28 +80,34 @@ describe('AuditClient (mocked HTTP)', () => {
     expect(result.stats.uniqueUsers).toBe(1);
   });
 
-  // EXPORT-01: exportLogs() returns bare array (not response.entries)
-  it('exportLogs returns the bare array directly (not response.entries)', async () => {
+  // EXPORT-01: exportLogs() returns bare raw-shape array and sends format=json in query
+  it('exportLogs returns the bare raw array and sends format=json query param', async () => {
     const mockArray = [
       {
-        id: 'e1',
-        timestamp: '2026-01-15T10:00:00Z',
+        id: 1,
+        ts: '2026-01-15T10:00:00Z',
+        client_cn: 'acme/admin',
         action: 'SECRET_CREATE',
         resource: '/v1/secrets/bar',
-        actor: 'acme/admin',
-        clientCert: 'acme/admin',
-        result: 'success' as const,
+        result: 'success',
         ip: '10.0.0.1',
-        metadata: null,
       },
     ];
-    // Server returns a bare array
+    // Server returns a bare array of raw (snake_case) rows
     http.get.mockResolvedValue(mockArray);
 
     const result = await client.exportLogs({ format: 'json' });
+
+    // format=json must reach the query string
+    const callArg: string = http.get.mock.calls[0][0] as string;
+    expect(callArg).toContain('format=json');
+
+    // Result is a bare array with the raw snake_case shape
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('e1');
+    expect(result[0].ts).toBe('2026-01-15T10:00:00Z');
+    expect(result[0].client_cn).toBe('acme/admin');
+    expect(result[0].result).toBe('success');
   });
 
   // AUDIT-03: getStats() hits /v1/audit/stats and returns correct shape
