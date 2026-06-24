@@ -991,44 +991,63 @@ export interface PolicyFilter {
 // ============================================================================
 
 export interface AuditEntry {
-  id: number;
+  id: string;
   timestamp: string;
   action: string;
-  userId?: string;
-  username?: string;
-  tenantId?: string;
-  resourceType?: string;
-  resourceId?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  requestId?: string;
-  success: boolean;
-  errorMessage?: string;
-  details?: Record<string, unknown>;
+  resource: string;
+  actor: string;
+  clientCert: string;
+  result: 'success' | 'failure';
+  ip: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AuditFilter {
-  startDate?: string;
-  endDate?: string;
+  /** Filter by client CN (maps to query param client_cn) */
+  clientCn?: string;
   action?: string;
-  userId?: string;
-  resourceType?: string;
-  success?: boolean;
+  resource?: string;
+  /** ISO 8601 start date (maps to query param start_date) */
+  startDate?: string;
+  /** ISO 8601 end date (maps to query param end_date) */
+  endDate?: string;
   limit?: number;
   offset?: number;
+  /** Export format: json (default) or csv — used by exportLogs only */
+  format?: 'json' | 'csv';
 }
 
 export interface AuditStats {
-  totalEntries: number;
-  entriesByAction: Record<string, number>;
-  entriesByUser: Record<string, number>;
+  total: number;
+  successCount: number;
+  failureCount: number;
+  uniqueUsers: number;
   successRate: number;
+  topActors: Array<{ actor: string; count: number }>;
+  topActions: Array<{ action: string; count: number }>;
+  recentFailures: Array<{ timestamp: string; action: string; actor: string; resource: string }>;
 }
 
 export interface AuditVerifyResult {
   valid: boolean;
-  entriesChecked: number;
-  brokenAt?: number;
+  errors: string[];
+  checkedEntries: number;
+  lastVerified: string;
+}
+
+export interface AuditListResponse {
+  items: AuditEntry[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+  stats: {
+    successCount: number;
+    failureCount: number;
+    uniqueUsers: number;
+  };
 }
 
 // ============================================================================

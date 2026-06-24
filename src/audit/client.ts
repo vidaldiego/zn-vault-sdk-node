@@ -4,54 +4,69 @@ import type { HttpClient } from '../http/client.js';
 import type {
   AuditEntry,
   AuditFilter,
-  PaginatedResponse,
+  AuditListResponse,
+  AuditStats,
+  AuditVerifyResult,
 } from '../types/index.js';
-
-export interface AuditVerifyResult {
-  valid: boolean;
-  totalEntries: number;
-  verifiedEntries: number;
-  firstBrokenEntry?: number;
-  error?: string;
-}
 
 export class AuditClient {
   constructor(private http: HttpClient) {}
 
-  async list(filter?: AuditFilter): Promise<PaginatedResponse<AuditEntry>> {
+  /**
+   * List audit log entries with optional filtering and pagination.
+   * Returns items, pagination metadata, and summary stats.
+   *
+   * Query params are sent as snake_case to match the server contract:
+   * client_cn, action, resource, start_date, end_date, limit, offset.
+   */
+  async list(filter?: AuditFilter): Promise<AuditListResponse> {
     const params = new URLSearchParams();
-    if (filter?.userId) params.set('userId', filter.userId);
+    if (filter?.clientCn) params.set('client_cn', filter.clientCn);
     if (filter?.action) params.set('action', filter.action);
-    if (filter?.resourceType) params.set('resourceType', filter.resourceType);
-    if (filter?.startDate) params.set('startDate', filter.startDate);
-    if (filter?.endDate) params.set('endDate', filter.endDate);
-    if (filter?.limit) params.set('limit', filter.limit.toString());
-    if (filter?.offset) params.set('offset', filter.offset.toString());
+    if (filter?.resource) params.set('resource', filter.resource);
+    if (filter?.startDate) params.set('start_date', filter.startDate);
+    if (filter?.endDate) params.set('end_date', filter.endDate);
+    if (filter?.limit !== undefined) params.set('limit', filter.limit.toString());
+    if (filter?.offset !== undefined) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
     const path = query ? `/v1/audit?${query}` : '/v1/audit';
-    return this.http.get<PaginatedResponse<AuditEntry>>(path);
+    return this.http.get<AuditListResponse>(path);
   }
 
-  async get(id: string): Promise<AuditEntry> {
-    return this.http.get<AuditEntry>(`/v1/audit/${id}`);
-  }
-
+  /**
+   * Verify the HMAC chain integrity of the audit log.
+   * Returns validation status, any errors found, and a timestamp.
+   */
   async verify(): Promise<AuditVerifyResult> {
     return this.http.get<AuditVerifyResult>('/v1/audit/verify');
   }
 
+  /**
+   * Export audit logs as a JSON array or CSV.
+   * Returns the bare array of entries (JSON) or a CSV string.
+   *
+   * Note: the server returns a bare JSON array (not wrapped in an object).
+   */
   async exportLogs(filter?: AuditFilter): Promise<AuditEntry[]> {
     const params = new URLSearchParams();
-    if (filter?.userId) params.set('userId', filter.userId);
+    if (filter?.format) params.set('format', filter.format);
+    if (filter?.clientCn) params.set('client_cn', filter.clientCn);
     if (filter?.action) params.set('action', filter.action);
-    if (filter?.resourceType) params.set('resourceType', filter.resourceType);
-    if (filter?.startDate) params.set('startDate', filter.startDate);
-    if (filter?.endDate) params.set('endDate', filter.endDate);
+    if (filter?.startDate) params.set('start_date', filter.startDate);
+    if (filter?.endDate) params.set('end_date', filter.endDate);
 
     const query = params.toString();
     const path = query ? `/v1/audit/export?${query}` : '/v1/audit/export';
-    const response = await this.http.get<{ entries: AuditEntry[] }>(path);
-    return response.entries;
+    return this.http.get<AuditEntry[]>(path);
+  }
+
+  /**
+   * Get aggregated audit statistics for the current tenant.
+   * Returns total counts, success/failure breakdown, top actors and actions,
+   * and recent failures.
+   */
+  async getStats(): Promise<AuditStats> {
+    return this.http.get<AuditStats>('/v1/audit/stats');
   }
 }

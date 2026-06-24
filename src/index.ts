@@ -488,7 +488,7 @@ export { UsersClient, RolesClient, PoliciesClient } from './admin/index.js';
 export { ZnVaultSuperadminClient, SuperadminAuthClient } from './superadmin/index.js';
 export type { ZnVaultSuperadminConfig } from './superadmin/index.js';
 export { TenantsClient } from './admin/tenants.js';
-export { AuditClient, type AuditVerifyResult } from './audit/index.js';
+export { AuditClient } from './audit/index.js';
 export { HealthClient, type HealthStatus, type ReadinessStatus } from './health/index.js';
 
 // Re-export auth providers
