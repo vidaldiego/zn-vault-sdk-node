@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { ZnVaultClient, ZnVaultSuperadminClient } from '../src/index.js';
 import { TestConfig } from './test-config.js';
+import { probeServer } from './helpers/integration.js';
 
 /**
  * Integration tests that run against a real ZnVault server.
@@ -18,6 +19,15 @@ const shouldRunIntegration = TestConfig.isIntegrationEnabled();
 
 // Skip all integration tests if environment not configured
 describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
+  // Graceful skip when ZNVAULT_BASE_URL is set but no server is actually running.
+  let serverUnreachable = false;
+
+  beforeAll(async () => {
+    if (!(await probeServer())) {
+      serverUnreachable = true;
+    }
+  });
+
   // ===================
   // Health Tests
   // ===================
@@ -25,16 +35,19 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeAll(() => {
+      if (serverUnreachable) return;
       client = TestConfig.createTestClient();
     });
 
     it('should return healthy status', async () => {
+      if (serverUnreachable) return;
       const health = await client.health.check();
       expect(health.status).toBe('ok');
       console.log(`✓ Health status: ${health.status}`);
     });
 
     it('should report live status', async () => {
+      if (serverUnreachable) return;
       const result = await client.health.live();
       expect(result.status).toBe('ok');
       console.log('✓ Live check successful');
@@ -48,10 +61,12 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeEach(() => {
+      if (serverUnreachable) return;
       client = TestConfig.createTestClient();
     });
 
     it('should login with valid superadmin credentials', async () => {
+      if (serverUnreachable) return;
       const response = await client.login(
         TestConfig.Users.SUPERADMIN_USERNAME,
         TestConfig.Users.SUPERADMIN_PASSWORD
@@ -65,6 +80,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should login with valid reader user credentials', async () => {
+      if (serverUnreachable) return;
       const response = await client.login(
         TestConfig.Users.READER_USERNAME,
         TestConfig.Users.READER_PASSWORD
@@ -75,6 +91,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should fail login with invalid credentials', async () => {
+      if (serverUnreachable) return;
       await expect(
         client.login('invalid_user', 'wrong_password')
       ).rejects.toThrow();
@@ -83,6 +100,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should get current user info after login', async () => {
+      if (serverUnreachable) return;
       await client.login(
         TestConfig.Users.SUPERADMIN_USERNAME,
         TestConfig.Users.SUPERADMIN_PASSWORD
@@ -105,12 +123,14 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let createdSecretIds: string[] = [];
 
     beforeAll(async () => {
+      if (serverUnreachable) return;
       // Use tenant admin - has full tenant permissions including secret:read:value
       // Tenant has allow_admin_secret_access=true so admin can decrypt secrets
       client = await TestConfig.createTenantAdminClient();
     });
 
     afterEach(async () => {
+      if (serverUnreachable) return;
       // Cleanup created secrets
       for (const id of createdSecretIds) {
         try {
@@ -124,6 +144,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should create a credential secret', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('creds');
 
       const secret = await client.secrets.create({
@@ -151,6 +172,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should create an opaque secret', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('opaque');
 
       const secret = await client.secrets.create({
@@ -172,6 +194,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should decrypt secret value', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('decrypt');
 
       const created = await client.secrets.create({
@@ -197,6 +220,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should update secret and create new version', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('update');
 
       const created = await client.secrets.create({
@@ -224,6 +248,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should rotate secret', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('rotate');
 
       const created = await client.secrets.create({
@@ -254,6 +279,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should list secrets', async () => {
+      if (serverUnreachable) return;
       // Create some secrets
       for (let i = 0; i < 3; i++) {
         const secret = await client.secrets.create({
@@ -273,6 +299,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should delete a secret', async () => {
+      if (serverUnreachable) return;
       const alias = TestConfig.uniqueAlias('delete');
 
       const created = await client.secrets.create({
@@ -300,11 +327,13 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let createdUserIds: string[] = [];
 
     beforeAll(async () => {
+      if (serverUnreachable) return;
       // Use tenant admin - has user management permissions within their tenant
       client = await TestConfig.createTenantAdminClient();
     });
 
     afterEach(async () => {
+      if (serverUnreachable) return;
       // Cleanup created users
       for (const id of createdUserIds) {
         try {
@@ -318,6 +347,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should list users', async () => {
+      if (serverUnreachable) return;
       const response = await client.users.list();
       expect(response).toBeDefined();
       expect(response.items).toBeDefined();
@@ -325,6 +355,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should create a new user', async () => {
+      if (serverUnreachable) return;
       const username = TestConfig.uniqueId('testuser');
 
       const user = await client.users.create({
@@ -345,6 +376,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should delete a user', async () => {
+      if (serverUnreachable) return;
       const username = TestConfig.uniqueId('deleteuser');
 
       const user = await client.users.create({
@@ -367,6 +399,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let admin: ZnVaultSuperadminClient;
 
     beforeAll(async () => {
+      if (serverUnreachable) return;
       admin = new ZnVaultSuperadminClient({
         baseUrl: TestConfig.BASE_URL,
         rejectUnauthorized: false,
@@ -383,6 +416,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should list tenants', async () => {
+      if (serverUnreachable) return;
       const response = await admin.tenants.list();
       expect(response).toBeDefined();
       expect(response.items).toBeDefined();
@@ -390,6 +424,7 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     });
 
     it('should get tenant by ID', async () => {
+      if (serverUnreachable) return;
       const tenant = await admin.tenants.get(TestConfig.DEFAULT_TENANT);
       expect(tenant.id).toBe(TestConfig.DEFAULT_TENANT);
       console.log(`✓ Retrieved tenant: ${tenant.id}`);
@@ -403,11 +438,13 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeAll(async () => {
+      if (serverUnreachable) return;
       // Use tenant admin - can manage roles within their tenant
       client = await TestConfig.createTenantAdminClient();
     });
 
     it('should list roles', async () => {
+      if (serverUnreachable) return;
       const response = await client.roles.list();
       expect(response).toBeDefined();
       expect(response.items).toBeDefined();
@@ -422,11 +459,13 @@ describe.skipIf(!shouldRunIntegration)('Integration Tests', () => {
     let client: ZnVaultClient;
 
     beforeAll(async () => {
+      if (serverUnreachable) return;
       // Use tenant admin - can view audit logs within their tenant
       client = await TestConfig.createTenantAdminClient();
     });
 
     it('should list audit logs', async () => {
+      if (serverUnreachable) return;
       const response = await client.audit.list();
       expect(response).toBeDefined();
       expect(response.items).toBeDefined();

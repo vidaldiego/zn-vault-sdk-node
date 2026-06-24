@@ -7,6 +7,7 @@ import { AuthorizationError } from '../src/http/client.js';
 import type { HttpClient } from '../src/http/client.js';
 import type { ZnVaultClient } from '../src/index.js';
 import { TestConfig } from './test-config.js';
+import { probeServer } from './helpers/integration.js';
 
 /**
  * A raw OpenSSH certificate string (as returned by POST /v1/ssh/sign) begins
@@ -259,23 +260,18 @@ describe.skipIf(!shouldRunIntegration)('SSHCAClient (integration)', () => {
   let serverUnreachable = false;
 
   beforeAll(async () => {
+    if (!(await probeServer())) {
+      serverUnreachable = true;
+      return;
+    }
+    client = await TestConfig.createTenantAdminClient();
+    // Ensure the CA exists; ignore "already initialized" (409).
     try {
-      client = await TestConfig.createTenantAdminClient();
-      // Ensure the CA exists; ignore "already initialized" (409).
-      try {
-        await client.sshca.initCa({ keyType: 'ed25519' });
-      } catch (err) {
-        // 409 = already initialized — fine for an idempotent setup.
-        const code = (err as { statusCode?: number }).statusCode;
-        if (code !== 409) throw err;
-      }
+      await client.sshca.initCa({ keyType: 'ed25519' });
     } catch (err) {
-      const code = (err as { errorCode?: string }).errorCode;
-      if (code === 'CONNECTION_ERROR' || code === 'TIMEOUT') {
-        serverUnreachable = true;
-        return;
-      }
-      throw err;
+      // 409 = already initialized — fine for an idempotent setup.
+      const code = (err as { statusCode?: number }).statusCode;
+      if (code !== 409) throw err;
     }
   });
 
@@ -302,14 +298,13 @@ describe.skipIf(!shouldRunIntegration)('SSHCAClient (integration)', () => {
     expect(typeof result.serial).toBe('string');
     expect(result.principals).toContain('ubuntu');
 
-    // The freshly issued cert should appear in the list, then be revocable.
+    // The freshly issued cert MUST appear in the list — fail loudly if absent.
     const page = await client.sshca.listCertificates({ limit: 50 });
     expect(Array.isArray(page.items)).toBe(true);
     const match = page.items.find((c) => c.serial === result.serial);
-    if (match) {
-      await client.sshca.revokeCertificate(match.id, 'integration-test cleanup');
-      const after = await client.sshca.getCertificate(match.id);
-      expect(after.revoked).toBe(true);
-    }
+    expect(match).toBeDefined();
+    await client.sshca.revokeCertificate(match!.id, 'integration-test cleanup');
+    const after = await client.sshca.getCertificate(match!.id);
+    expect(after.revoked).toBe(true);
   });
 });
