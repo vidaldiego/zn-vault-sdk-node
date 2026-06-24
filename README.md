@@ -365,17 +365,33 @@ const key = await client.kms.createKey({
   tenantId: 'acme'
 });
 
-// Encrypt data
-const encrypted = await client.kms.encrypt(key.id, 'sensitive data');
-// or with context
-const encrypted = await client.kms.encryptString(key.id, 'sensitive data', {
+// Encrypt data (convenience helper — returns the ciphertext string directly)
+const ciphertext = await client.kms.encryptString(key.id, 'sensitive data');
+// or with encryption context (recommended)
+const ciphertext = await client.kms.encryptString(key.id, 'sensitive data', {
   app: 'my-service'
 });
 
-// Decrypt data
-const decrypted = await client.kms.decryptString(key.id, encrypted);
+// Decrypt data (context must match what was used to encrypt)
+const decrypted = await client.kms.decryptString(key.id, ciphertext, {
+  app: 'my-service'
+});
 
-// Encrypt/decrypt binary data
+// Low-level: encrypt/decrypt using the raw EncryptRequest shape
+const encResult = await client.kms.encrypt({
+  keyId: key.id,
+  plaintext: Buffer.from('hello').toString('base64'),
+  context: { purpose: 'backup' },
+});
+// encResult.ciphertext — base64-encoded ciphertext
+const decResult = await client.kms.decrypt({
+  keyId: key.id,
+  ciphertext: encResult.ciphertext,
+  context: { purpose: 'backup' },
+});
+// decResult.plaintext — base64-encoded plaintext
+
+// Encrypt/decrypt binary data (context is optional, defaults to {})
 const encryptedBuffer = await client.kms.encryptBuffer(key.id, buffer);
 const decryptedBuffer = await client.kms.decryptBuffer(key.id, encryptedBuffer);
 
@@ -559,13 +575,15 @@ await client.policies.attachToRole(policy.id, roleId);
 ```typescript
 // List audit entries
 const logs = await client.audit.list({
-  tenantId: 'acme',
   action: 'secret:decrypt',
   startDate: '2024-01-01',
   endDate: '2024-12-31',
-  page: 1,
-  pageSize: 100
+  limit: 100,
+  offset: 0
 });
+
+// Get aggregated statistics for the current tenant
+const stats = await client.audit.getStats();
 
 // Verify audit chain integrity
 const verification = await client.audit.verify();
@@ -579,7 +597,7 @@ if (!verification.valid) {
 ```typescript
 // Full health check
 const health = await client.health.check();
-console.log(health.status); // 'healthy', 'degraded', or 'unhealthy'
+console.log(health.status); // 'ok', 'degraded', or 'error'
 
 // Readiness check
 const ready = await client.health.ready();
@@ -645,9 +663,32 @@ const secrets: PaginatedResponse<Secret> = await client.secrets.list();
 
 ## Testing
 
-### Running Tests
+### Unit Tests
 
-The SDK uses an ephemeral Docker environment for integration testing. Tests run against a fresh vault instance that is automatically created and destroyed.
+```bash
+npx vitest run
+```
+
+Unit tests run without any external dependencies and self-skip integration
+suites when no vault server is detected.
+
+### Docker E2E Tests
+
+The SDK ships a full Docker-based end-to-end harness that boots a real
+`znvault:e2e` vault image, runs 6 E2E suites covering the corrected API
+shapes (KMS encrypt/decrypt, auth flows, secrets, audit, health, SSH-CA
+KRL), then tears everything down.
+
+```bash
+# Build the vault image and run all E2E suites (requires Docker)
+npm run test:e2e
+```
+
+> **Requirement:** The parent `zn-vault/` server repo must be present at
+> `../` (sibling of this SDK). The script builds a `znvault:e2e` Docker
+> image from it automatically.
+
+### Legacy Integration Runner
 
 ```bash
 # From the SDK directory, use the SDK test runner:
