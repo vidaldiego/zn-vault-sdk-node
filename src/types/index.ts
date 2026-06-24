@@ -615,7 +615,8 @@ export interface SecretVersion {
  * Each entry represents a previous version that was superseded by an update.
  */
 export interface SecretHistoryEntry {
-  id: string;
+  /** Numeric auto-increment primary key from secrets_history table. */
+  id: number;
   secretId: string;
   tenant: string;
   alias: string;

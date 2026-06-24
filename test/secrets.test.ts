@@ -73,7 +73,7 @@ describe('SecretsClient getHistory (SECRET-02)', () => {
   const paginatedResponse = {
     items: [
       {
-        id: 'hist-1',
+        id: 1,
         secretId: 'sec-3',
         tenant: 'acme',
         alias: 'web/prod/cert',
@@ -108,7 +108,8 @@ describe('SecretsClient getHistory (SECRET-02)', () => {
     expect(result).toHaveProperty('pagination');
     expect(Array.isArray(result.items)).toBe(true);
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].id).toBe('hist-1');
+    expect(result.items[0].id).toBe(1);
+    expect(typeof result.items[0].id).toBe('number');
     expect(result.items[0].secretId).toBe('sec-3');
   });
 
