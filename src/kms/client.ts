@@ -25,17 +25,20 @@ export class KmsClient {
       description: request.description,
       usage: request.usage ?? 'ENCRYPT_DECRYPT',
       keySpec: request.keySpec ?? 'AES_256',
-      rotationEnabled: request.rotationEnabled,
-      rotationPeriodDays: request.rotationPeriodDays,
+      origin: request.origin,
+      multiRegion: request.multiRegion,
+      tags: request.tags,
     });
   }
 
   async getKey(keyId: string): Promise<KmsKey> {
-    return this.http.get<KmsKey>(`/v1/kms/keys/${keyId}`);
+    const r = await this.http.get<{ keyMetadata: KmsKey }>(`/v1/kms/keys/${keyId}`);
+    return r.keyMetadata;
   }
 
   async getKeyByAlias(alias: string): Promise<KmsKey> {
-    return this.http.get<KmsKey>(`/v1/kms/keys/alias/${alias}`);
+    const r = await this.http.get<{ keyMetadata: KmsKey }>(`/v1/kms/keys/alias/${encodeURIComponent(alias)}`);
+    return r.keyMetadata;
   }
 
   async listKeys(filter?: KeyFilter): Promise<PaginatedResponse<KmsKey>> {

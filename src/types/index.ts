@@ -665,22 +665,22 @@ export interface PublicKeyList {
 // ============================================================================
 
 export type KeyUsage = 'ENCRYPT_DECRYPT' | 'SIGN_VERIFY';
-export type KeySpec = 'AES_256' | 'RSA_2048' | 'RSA_4096' | 'ECC_P256' | 'ECC_P384';
-export type KeyState = 'Enabled' | 'Disabled' | 'PendingDeletion' | 'Deleted';
+export type KeySpec = 'AES_256' | 'AES_128' | 'RSA_2048' | 'RSA_4096' | 'ECC_NIST_P256' | 'ECC_NIST_P384';
+export type KeyState = 'ENABLED' | 'DISABLED' | 'PENDING_DELETION';
 
 export interface KmsKey {
   keyId: string;
   alias?: string;
+  arn?: string;
   description?: string;
-  usage: KeyUsage;
+  keyState: KeyState;
+  keyUsage: KeyUsage;
   keySpec: KeySpec;
-  state: KeyState;
-  tenantId?: string;
-  rotationEnabled: boolean;
-  rotationPeriodDays?: number;
-  nextRotationDate?: string;
-  createdAt: string;
+  createdDate: string;
   deletionDate?: string;
+  multiRegion?: boolean;
+  origin?: string;
+  tenantId?: string;
 }
 
 export interface CreateKeyRequest {
@@ -688,8 +688,9 @@ export interface CreateKeyRequest {
   description?: string;
   usage?: KeyUsage;
   keySpec?: KeySpec;
-  rotationEnabled?: boolean;
-  rotationPeriodDays?: number;
+  origin?: string;
+  multiRegion?: boolean;
+  tags?: Array<{ key: string; value: string }>;
 }
 
 export interface EncryptRequest {

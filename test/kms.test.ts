@@ -54,3 +54,97 @@ describe('KmsClient crypto (mocked HTTP)', () => {
     expect(res.destinationKeyId).toBe('dst-key');
   });
 });
+
+// KMS-04/05/09, URL-01: keyMetadata unwrap, keyState/createdDate field names,
+// alias URL-encoding, phantom rotation fields removed from createKey body.
+describe('KmsClient key metadata contract (mocked HTTP)', () => {
+  let client: KmsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({ client, http } = makeClient()));
+
+  const wrappedKey = {
+    keyMetadata: {
+      keyId: 'key-uuid-1',
+      alias: 'my/prod/key',
+      arn: 'arn:zn-vault:kms:us-east-1:acme:key/key-uuid-1',
+      createdDate: '2026-01-01T00:00:00.000Z',
+      description: 'Production key',
+      keyState: 'ENABLED',
+      keyUsage: 'ENCRYPT_DECRYPT',
+      keySpec: 'AES_256',
+      multiRegion: false,
+      origin: 'ZN_VAULT',
+    },
+  };
+
+  it('getKey unwraps keyMetadata and exposes keyState/createdDate (KMS-04/05)', async () => {
+    http.get.mockResolvedValue(wrappedKey);
+    const key = await client.getKey('key-uuid-1');
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/key-uuid-1');
+    // Must unwrap keyMetadata
+    expect(key.keyId).toBe('key-uuid-1');
+    expect(key.keyState).toBe('ENABLED');
+    expect(key.createdDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(key.keyUsage).toBe('ENCRYPT_DECRYPT');
+    // Must NOT have phantom rotation fields
+    expect((key as Record<string, unknown>).rotationEnabled).toBeUndefined();
+    expect((key as Record<string, unknown>).rotationPeriodDays).toBeUndefined();
+    // Must NOT expose old field aliases
+    expect((key as Record<string, unknown>).state).toBeUndefined();
+    expect((key as Record<string, unknown>).createdAt).toBeUndefined();
+    expect((key as Record<string, unknown>).usage).toBeUndefined();
+  });
+
+  it('getKeyByAlias URL-encodes the alias and unwraps keyMetadata (KMS-09, URL-01)', async () => {
+    http.get.mockResolvedValue(wrappedKey);
+    const key = await client.getKeyByAlias('my/prod/key');
+    // Slash in alias must be percent-encoded
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys/alias/my%2Fprod%2Fkey');
+    expect(key.keyId).toBe('key-uuid-1');
+    expect(key.keyState).toBe('ENABLED');
+    expect(key.createdDate).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('createKey omits rotationEnabled/rotationPeriodDays from request body', async () => {
+    const createResponse = {
+      keyId: 'new-key-id',
+      alias: 'billing/key',
+      arn: 'arn:zn-vault:kms:us-east-1:acme:key/new-key-id',
+      createdDate: '2026-06-24T00:00:00.000Z',
+      keyState: 'ENABLED',
+      keyUsage: 'ENCRYPT_DECRYPT',
+      keySpec: 'AES_256',
+    };
+    http.post.mockResolvedValue(createResponse);
+    const result = await client.createKey({
+      alias: 'billing/key',
+      description: 'Billing key',
+    });
+    const body = http.post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('rotationEnabled');
+    expect(body).not.toHaveProperty('rotationPeriodDays');
+    expect(body.alias).toBe('billing/key');
+    expect(body.usage).toBe('ENCRYPT_DECRYPT');
+    expect(body.keySpec).toBe('AES_256');
+    // createKey response is not wrapped in keyMetadata
+    expect(result.keyId).toBe('new-key-id');
+    expect(result.keyState).toBe('ENABLED');
+    expect(result.createdDate).toBe('2026-06-24T00:00:00.000Z');
+  });
+
+  it('listKeys maps items with keyState and createdDate (not state/createdAt)', async () => {
+    const listResponse = {
+      items: [
+        { keyId: 'k1', alias: 'prod/key', keyState: 'ENABLED', createdDate: '2026-01-01T00:00:00.000Z' },
+        { keyId: 'k2', keyState: 'DISABLED', createdDate: '2026-02-01T00:00:00.000Z' },
+      ],
+      pagination: { total: 2, limit: 50, offset: 0, hasMore: false },
+    };
+    http.get.mockResolvedValue(listResponse);
+    const result = await client.listKeys({ state: 'ENABLED', limit: 10 });
+    expect(http.get).toHaveBeenCalledWith('/v1/kms/keys?state=ENABLED&limit=10');
+    expect(result.items[0].keyId).toBe('k1');
+    expect(result.items[0].keyState).toBe('ENABLED');
+    expect(result.items[0].createdDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.items[1].keyState).toBe('DISABLED');
+  });
+});
