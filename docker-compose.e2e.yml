@@ -1,0 +1,55 @@
+# docker-compose.e2e.yml — self-contained E2E vault for SDK tests.
+# Builds the znvault:e2e image from the PARENT repo (server source lives there).
+# Run from the SDK repo root with the parent repo present at ../ .
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: znvault-e2e-postgres
+    environment:
+      POSTGRES_USER: znvault
+      POSTGRES_PASSWORD: znvault
+      POSTGRES_DB: znvault
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U znvault -d znvault"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks: [e2e]
+
+  vault:
+    build:
+      context: ..                       # parent repo = build context (has server src)
+      dockerfile: docker/Dockerfile.sdk-test
+    image: znvault:e2e                   # <-- this tags the :e2e image
+    container_name: znvault-e2e-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 8443
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://znvault:znvault@postgres:5432/znvault
+      PG_SSL: "false"
+      JWT_SECRET: e2e-jwt-secret-minimum-32-characters-required-xx
+      HA_ENABLED: "false"
+      LOG_LEVEL: error
+      DATA_DIR: /app/data
+      SDK_TEST_MODE: "true"
+    ports:
+      - "9443:8443"
+    tmpfs:
+      - /app/data
+    healthcheck:
+      test: ["CMD", "node", "scripts/sdk-health-check.js"]
+      interval: 2s
+      timeout: 5s
+      retries: 45
+      start_period: 15s
+    networks: [e2e]
+
+networks:
+  e2e:
+    driver: bridge

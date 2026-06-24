@@ -24,3 +24,7 @@ coverage/
 # Environment
 .env
 .env.local
+
+# Subagent-driven-development scratch
+.superpowers/
+.e2e.env
