@@ -516,8 +516,17 @@ export {
   SSOError,
   SSOAuthError,
   createSSOClient,
+  // Fastify middleware
   createFastifySSOAuth,
+  createFastifySSOScopes,
+  createFastifySSORoles,
+  // Express middleware
   createExpressSSOAuth,
+  createExpressSSOScopes,
+  createExpressSSORoles,
+  // Helpers
+  requireScopes,
+  requireRole,
   type SSOClientConfig,
   type ValidatedToken,
   type TokenIntrospectionResponse,

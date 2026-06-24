@@ -339,8 +339,8 @@ export function createExpressSSOScopes(client: SSOClient, requiredScopes: string
 /**
  * Create Express middleware that requires specific roles.
  */
-export function createExpressSSOScopes_Roles(client: SSOClient, allowedRoles: string[]) {
-  return function expressSSOScopes(
+export function createExpressSSORoles(client: SSOClient, allowedRoles: string[]) {
+  return function expressSSORoles(
     req: unknown,
     res: { status: (code: number) => { json: (body: unknown) => void } },
     next: ExpressNextFunction

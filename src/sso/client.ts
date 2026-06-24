@@ -144,6 +144,14 @@ export class SSOClient {
     if (this.cache) {
       const cached = this.cache.get(tokenHash);
       if (cached !== undefined) {
+        // CACHE-01: Re-check the token's own exp even on a cache hit.
+        // The cache TTL may extend beyond the token's actual expiry, so an
+        // active-cached token can appear valid after its exp has passed.
+        // Fail closed: treat an expired token as inactive and evict the entry.
+        if (cached.exp !== undefined && cached.exp * 1000 <= Date.now()) {
+          this.cache.invalidate(tokenHash);
+          return null;
+        }
         return cached.active ? this.parseIntrospectionResponse(cached) : null;
       }
     }

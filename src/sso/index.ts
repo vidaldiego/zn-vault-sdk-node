@@ -11,6 +11,7 @@ export {
   // Express middleware
   createExpressSSOAuth,
   createExpressSSOScopes,
+  createExpressSSORoles,
   // Helpers
   createSSOClient,
   requireScopes,
