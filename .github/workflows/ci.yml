@@ -1,0 +1,125 @@
+# CI workflow for @zincapp/znvault-sdk (PKG-01)
+# Two jobs:
+#   quality — fast gate: typecheck + lint + build + unit tests
+#   e2e     — boots the real vault image from the parent repo and runs the full e2e suite
+#
+# Checkout layout for the e2e job:
+#   $GITHUB_WORKSPACE/
+#     zn-vault/                    ← parent server repo (vidaldiego/zn-vault)
+#       docker/Dockerfile.sdk-test
+#       src/
+#       ...
+#       zn-vault-sdk-node/         ← this SDK repo (nested, matching local monorepo layout)
+#
+# From the SDK's working directory, ".." resolves to "zn-vault/" (the parent),
+# so docker-compose.e2e.yml's `context: ..` and `dockerfile: docker/Dockerfile.sdk-test`
+# both resolve correctly — identical to the local dev layout.
+#
+# NOTE (future): publish.yml should add `needs: [quality]` once this workflow is
+# proven stable, to gate npm publishes on the quality job.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # quality: fast pre-gate — typecheck, lint, build, unit tests
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # Run the unit/integration suite.
+      # ZNVAULT_BASE_URL is intentionally NOT set, so integration suites
+      # self-skip (they check for a reachable server before running).
+      - name: Unit tests
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  # e2e: boots real vault image, runs full e2e suite
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # Step 1 — Check out the parent server repo into zn-vault/
+      # The parent repo contains the server source and docker/Dockerfile.sdk-test
+      # which is needed to build the vault image used by docker-compose.e2e.yml.
+      #
+      # NOTE: if vidaldiego/zn-vault is private, the default GITHUB_TOKEN only
+      # grants access to the current repository. In that case, create a PAT with
+      # `contents: read` on the parent repo, store it as a repository secret
+      # (e.g. ZN_VAULT_REPO_TOKEN), and pass it via:
+      #   token: ${{ secrets.ZN_VAULT_REPO_TOKEN }}
+      # The default below uses GITHUB_TOKEN and will fail for private parent repos.
+      - name: Checkout parent repo (zn-vault server)
+        uses: actions/checkout@v4
+        with:
+          repository: vidaldiego/zn-vault
+          path: zn-vault
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 2 — Check out THIS repo nested inside the parent, recreating the
+      # monorepo layout: zn-vault/zn-vault-sdk-node/
+      - name: Checkout SDK repo
+        uses: actions/checkout@v4
+        with:
+          path: zn-vault/zn-vault-sdk-node
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: zn-vault/zn-vault-sdk-node/package-lock.json
+
+      - name: Install dependencies
+        working-directory: zn-vault/zn-vault-sdk-node
+        run: npm ci
+
+      - name: Build SDK
+        working-directory: zn-vault/zn-vault-sdk-node
+        run: npm run build
+
+      # Verify the parent build context is present before starting docker compose.
+      # This catches misconfigured checkout paths early with a clear error.
+      - name: Verify parent build context
+        working-directory: zn-vault/zn-vault-sdk-node
+        run: |
+          if [ ! -f "../docker/Dockerfile.sdk-test" ]; then
+            echo "ERROR: ../docker/Dockerfile.sdk-test not found."
+            echo "Parent repo checkout at zn-vault/ is missing or incomplete."
+            exit 1
+          fi
+          echo "Parent build context OK: ../docker/Dockerfile.sdk-test found."
+
+      - name: Run E2E tests
+        working-directory: zn-vault/zn-vault-sdk-node
+        run: npm run test:e2e
