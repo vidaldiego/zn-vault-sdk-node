@@ -15,7 +15,8 @@ export interface HealthCheck {
  * Response from GET /v1/health.
  *
  * - `status`: overall system status
- * - `checks.db` / `checks.tls`: always present; `checks.kmip` only on KMIP-enabled nodes
+ * - `checks.db` / `checks.tls`: always present
+ * - `kmip`: top-level optional block, present only on KMIP-enabled nodes
  */
 export interface HealthStatus {
   status: 'ok' | 'degraded' | 'error';
@@ -29,12 +30,13 @@ export interface HealthStatus {
   checks: {
     db: HealthCheck;
     tls: HealthCheck;
-    kmip?: {
-      enabled: boolean;
-      listening: boolean;
-      port: number;
-      serverCertDaysToExpiry: number | null;
-    };
+  };
+  /** Present only on KMIP-enabled nodes. Top-level sibling of `checks`. */
+  kmip?: {
+    enabled: boolean;
+    listening: boolean;
+    port: number;
+    serverCertDaysToExpiry: number | null;
   };
 }
 

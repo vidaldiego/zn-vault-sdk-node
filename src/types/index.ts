@@ -870,9 +870,11 @@ export interface Tenant {
   contactEmail?: string;
   contactName?: string;
   metadata?: string;
+  /** @deprecated server emits created_at/updated_at */
   createdAt?: string;
   created_at?: string;
   createdBy?: string;
+  /** @deprecated server emits created_at/updated_at */
   updatedAt?: string;
   updated_at?: string;
   lastActivity?: string;

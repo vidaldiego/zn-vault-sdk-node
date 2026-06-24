@@ -120,7 +120,9 @@ describe('HealthClient.check() — HEALTH-01', () => {
     expect(result.status).not.toBe('unhealthy');
   });
 
-  it('surfaces optional kmip block when present', async () => {
+  it('surfaces optional kmip block as a TOP-LEVEL field (not inside checks)', async () => {
+    // The server sets response.kmip = {...} at the top level — NOT inside checks.
+    // See server health.ts line ~190: `response.kmip = { enabled, listening, port, ... }`.
     const serverResponse: HealthStatus = {
       status: 'ok',
       version: '1.46.6',
@@ -129,20 +131,28 @@ describe('HealthClient.check() — HEALTH-01', () => {
       checks: {
         db: { status: 'ok' },
         tls: { status: 'ok' },
-        kmip: {
-          enabled: true,
-          listening: true,
-          port: 5696,
-          serverCertDaysToExpiry: 180,
-        },
+      },
+      kmip: {
+        enabled: true,
+        listening: true,
+        port: 5696,
+        serverCertDaysToExpiry: 180,
       },
     };
     http.get.mockResolvedValue(serverResponse);
 
     const result = await client.check();
-    expect(result.checks.kmip).toBeDefined();
-    expect(result.checks.kmip?.enabled).toBe(true);
-    expect(result.checks.kmip?.port).toBe(5696);
+
+    // kmip must be at the top level, NOT nested under checks
+    expect(result.kmip).toBeDefined();
+    expect(result.kmip?.enabled).toBe(true);
+    expect(result.kmip?.listening).toBe(true);
+    expect(result.kmip?.port).toBe(5696);
+    expect(result.kmip?.serverCertDaysToExpiry).toBe(180);
+
+    // checks must NOT have a kmip property
+    const checks = result.checks as Record<string, unknown>;
+    expect(checks['kmip']).toBeUndefined();
   });
 
   it('calls GET /v1/health', async () => {
