@@ -172,3 +172,146 @@ describe('Retry-After clamp (RETRY-02)', () => {
     expect(execSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ROTATION-01: bind failure must still reschedule (no dead-stop)
+// MANAGEDKEY-02: setTimeout delay must be clamped to <= 2^31-1 ms
+// MANAGEDKEY-01: concurrent refreshManagedKey() calls share one in-flight bind
+// ---------------------------------------------------------------------------
+
+type ClientPrivate = {
+  managedKeyState: {
+    name: string;
+    currentKey: string;
+    nextRotationAt?: Date;
+    graceExpiresAt?: Date;
+    refreshBeforeExpiryMs: number;
+    refreshTimer?: ReturnType<typeof setTimeout>;
+    isRefreshing: boolean;
+    onKeyRotated?: (newKey: string, oldKey: string) => void;
+    onRotationError?: (error: Error) => void;
+    refreshInFlight?: Promise<unknown>;
+  };
+  bindManagedKeyInternal: (name: string) => Promise<unknown>;
+  scheduleManagedKeyRefresh: () => void;
+  doManagedKeyRefresh: () => Promise<unknown>;
+};
+
+function makeManagedClient() {
+  const client = new HttpClient({ baseUrl: 'https://localhost:9999', rejectUnauthorized: false });
+  // Inject managed key state directly (avoids calling bindManagedKeyInternal in initManagedKey)
+  (client as unknown as ClientPrivate).managedKeyState = {
+    name: 'test-key',
+    currentKey: 'znv_initial',
+    refreshBeforeExpiryMs: 30_000,
+    isRefreshing: false,
+  };
+  return client;
+}
+
+describe('ROTATION-01: bind failure reschedules (no dead-stop)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('scheduleManagedKeyRefresh is called even when bindManagedKeyInternal rejects', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+
+    const client = makeManagedClient();
+    const priv = client as unknown as ClientPrivate;
+
+    // Stub bind to reject
+    vi.spyOn(priv, 'bindManagedKeyInternal').mockRejectedValue(new Error('bind failed'));
+
+    // Spy on scheduleManagedKeyRefresh
+    const scheduleSpy = vi.spyOn(priv, 'scheduleManagedKeyRefresh');
+
+    // doManagedKeyRefresh should reject (bind error propagates)
+    await expect(priv.doManagedKeyRefresh()).rejects.toThrow('bind failed');
+
+    // But scheduleManagedKeyRefresh must still have been called (failure-path reschedule)
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MANAGEDKEY-02: setTimeout delay clamped to <= 2^31-1 ms', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('schedules with delay <= 2_147_483_647 when nextRotationAt is 60 days out', () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-01-01T00:00:00Z');
+    vi.setSystemTime(now);
+
+    const client = makeManagedClient();
+    const priv = client as unknown as ClientPrivate;
+
+    // 60 days in the future — well over 2^31-1 ms (~24.8 days)
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+    priv.managedKeyState.nextRotationAt = new Date(now.getTime() + sixtyDaysMs);
+    priv.managedKeyState.refreshBeforeExpiryMs = 0;
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    priv.scheduleManagedKeyRefresh();
+
+    // At least one setTimeout call should have a delay <= MAX
+    const MAX_DELAY = 2_147_483_647;
+    const delays = setTimeoutSpy.mock.calls.map((args) => args[1] as number);
+    expect(delays.length).toBeGreaterThan(0);
+    for (const d of delays) {
+      expect(d).toBeLessThanOrEqual(MAX_DELAY);
+    }
+  });
+});
+
+describe('MANAGEDKEY-01: concurrent refreshManagedKey() shares one in-flight bind', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('bindManagedKeyInternal called once; both callers get the same real response', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+
+    const client = makeManagedClient();
+    const priv = client as unknown as ClientPrivate;
+
+    const realResponse = {
+      id: 'key-123',
+      key: 'znv_real_rotated',
+      prefix: 'znv_real',
+      name: 'test-key',
+      expiresAt: '2026-02-01T00:00:00Z',
+      gracePeriod: '7d',
+      rotationMode: 'scheduled' as const,
+      permissions: ['read:secrets'],
+      nextRotationAt: '2026-02-01T00:00:00Z',
+      graceExpiresAt: '2026-02-08T00:00:00Z',
+    };
+
+    // Stub bind: resolves after a tick
+    const bindSpy = vi
+      .spyOn(priv, 'bindManagedKeyInternal')
+      .mockImplementation(() => Promise.resolve(realResponse));
+
+    // Also stub scheduleManagedKeyRefresh to avoid timer side-effects
+    vi.spyOn(priv, 'scheduleManagedKeyRefresh').mockReturnValue(undefined);
+
+    // Two concurrent calls
+    const [r1, r2] = await Promise.all([client.refreshManagedKey(), client.refreshManagedKey()]);
+
+    // bindManagedKeyInternal must have been called exactly once
+    expect(bindSpy).toHaveBeenCalledTimes(1);
+
+    // Both results must be the same real object (not fabricated empty)
+    expect(r1.id).toBe('key-123');
+    expect(r2.id).toBe('key-123');
+    expect(r1).toBe(r2); // same reference — shared in-flight promise
+  });
+});

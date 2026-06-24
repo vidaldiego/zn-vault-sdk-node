@@ -44,6 +44,11 @@ interface ManagedKeyState {
   onRotationError?: (error: Error) => void;
 }
 
+/**
+ * Maximum delay (ms) safe for setTimeout without integer overflow (2^31 - 1).
+ */
+const MAX_TIMER_DELAY = 2_147_483_647;
+
 export class ZnVaultError extends Error {
   constructor(
     message: string,
@@ -119,6 +124,8 @@ export class HttpClient {
   private tokenRefreshCallback?: TokenRefreshCallback;
   private managedKeyState?: ManagedKeyState;
   private managedKeyConfig?: ManagedKeyConfig;
+  /** Shared in-flight bind promise — prevents duplicate concurrent binds (MANAGEDKEY-01) */
+  private refreshInFlight?: Promise<ManagedKeyBindResponse>;
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -278,7 +285,11 @@ export class HttpClient {
   }
 
   /**
-   * Internal: schedule the next managed key refresh
+   * Internal: schedule the next managed key refresh.
+   *
+   * MANAGEDKEY-02: delays are clamped to MAX_TIMER_DELAY (2^31-1 ms) to avoid
+   * setTimeout integer overflow. When the true target is further out, the fired
+   * timer re-evaluates and reschedules (chained) instead of refreshing early.
    */
   private scheduleManagedKeyRefresh(): void {
     if (!this.managedKeyState) return;
@@ -313,9 +324,20 @@ export class HttpClient {
       return;
     }
 
-    // Schedule refresh
-    const delay = refreshAt - now;
+    // Clamp to MAX_TIMER_DELAY to avoid 32-bit integer overflow in setTimeout.
+    // If the true target is beyond MAX_TIMER_DELAY from now, schedule a
+    // re-evaluation instead of triggering a premature refresh.
+    const trueDelay = refreshAt - now;
+    const delay = Math.min(trueDelay, MAX_TIMER_DELAY);
+    // Capture refreshAt in a local const so the closure captures a definite number.
+    const targetAt = refreshAt;
+
     this.managedKeyState.refreshTimer = setTimeout(() => {
+      // Re-evaluate: if we still haven't reached the target, chain-reschedule.
+      if (Date.now() < targetAt) {
+        this.scheduleManagedKeyRefresh();
+        return;
+      }
       this.doManagedKeyRefresh().catch((err: unknown) => {
         this.managedKeyState?.onRotationError?.(err instanceof Error ? err : new Error(String(err)));
       });
@@ -323,65 +345,66 @@ export class HttpClient {
   }
 
   /**
-   * Internal: perform managed key refresh
+   * Internal: perform managed key refresh.
+   *
+   * MANAGEDKEY-01: concurrent callers share one in-flight Promise so that
+   * bindManagedKeyInternal is called exactly once and both callers receive the
+   * same real response (no fabricated empty-field object).
+   *
+   * ROTATION-01: scheduleManagedKeyRefresh() is called in a finally block so
+   * that a transient bind failure does not permanently stop auto-rotation.
    */
-  private async doManagedKeyRefresh(): Promise<ManagedKeyBindResponse> {
+  private doManagedKeyRefresh(): Promise<ManagedKeyBindResponse> {
     if (!this.managedKeyState) {
-      throw new Error('Not in managed key mode');
+      return Promise.reject(new Error('Not in managed key mode'));
     }
 
-    // Prevent concurrent refreshes
-    if (this.managedKeyState.isRefreshing) {
-      // Wait a bit and return current state
-      await this.sleep(100);
-      return {
-        id: '',
-        key: this.managedKeyState.currentKey,
-        prefix: '',
-        name: this.managedKeyState.name,
-        expiresAt: '',
-        gracePeriod: '',
-        rotationMode: 'scheduled',
-        permissions: [],
-        nextRotationAt: this.managedKeyState.nextRotationAt?.toISOString(),
-        graceExpiresAt: this.managedKeyState.graceExpiresAt?.toISOString(),
-      };
+    // Return the in-flight promise if one is already running (MANAGEDKEY-01).
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
     }
 
-    this.managedKeyState.isRefreshing = true;
-    const oldKey = this.managedKeyState.currentKey;
+    const state = this.managedKeyState;
+    const oldKey = state.currentKey;
 
-    try {
-      // Bind to get new key
-      const bindResponse = await this.bindManagedKeyInternal(this.managedKeyState.name);
+    state.isRefreshing = true;
 
-      // Update state
+    const bindPromise = this.bindManagedKeyInternal(state.name).then((bindResponse) => {
+      // Update state on success
       const newKey = bindResponse.key;
-      this.managedKeyState.currentKey = newKey;
-      this.managedKeyState.nextRotationAt = bindResponse.nextRotationAt
-        ? new Date(bindResponse.nextRotationAt)
-        : undefined;
-      this.managedKeyState.graceExpiresAt = bindResponse.graceExpiresAt
-        ? new Date(bindResponse.graceExpiresAt)
-        : undefined;
+      if (this.managedKeyState) {
+        this.managedKeyState.currentKey = newKey;
+        this.managedKeyState.nextRotationAt = bindResponse.nextRotationAt
+          ? new Date(bindResponse.nextRotationAt)
+          : undefined;
+        this.managedKeyState.graceExpiresAt = bindResponse.graceExpiresAt
+          ? new Date(bindResponse.graceExpiresAt)
+          : undefined;
+      }
 
       // Update the API key used for requests
       this.apiKey = newKey;
 
       // Notify callback if key changed
       if (newKey !== oldKey) {
-        this.managedKeyState.onKeyRotated?.(newKey, oldKey);
+        state.onKeyRotated?.(newKey, oldKey);
       }
 
-      // Schedule next refresh
-      this.scheduleManagedKeyRefresh();
-
       return bindResponse;
-    } finally {
+    });
+
+    // Wrap in a promise that always clears in-flight state and reschedules
+    // (ROTATION-01: reschedule on both success and failure).
+    this.refreshInFlight = bindPromise.finally(() => {
+      this.refreshInFlight = undefined;
       if (this.managedKeyState) {
         this.managedKeyState.isRefreshing = false;
       }
-    }
+      // Reschedule regardless of outcome so auto-rotation never dead-stops.
+      this.scheduleManagedKeyRefresh();
+    });
+
+    return this.refreshInFlight;
   }
 
   async request<T>(options: RequestOptions): Promise<T> {
