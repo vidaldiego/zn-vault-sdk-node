@@ -100,6 +100,8 @@ export interface ApiKeyConditions {
   aliases?: string[];
   /** Required resource tags (key-value pairs) */
   resourceTags?: Record<string, string>;
+  /** SSH principal allowlist for ssh:ca:sign-as machine signing */
+  sshPrincipals?: string[];
 }
 
 /**
