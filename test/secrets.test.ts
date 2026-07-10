@@ -219,3 +219,53 @@ describe('SecretsClient list (SECRET-04)', () => {
     expect(result.pagination.total).toBe(1);
   });
 });
+
+// SECRET-05: getFields GETs /v1/secrets/:id/fields and returns keys only
+describe('SecretsClient getFields (SECRET-05)', () => {
+  let client: SecretsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({ client, http } = makeClient()));
+
+  it('GETs /v1/secrets/:id/fields', async () => {
+    http.get.mockResolvedValue({ fields: ['host', 'password', 'username'] });
+    const result = await client.getFields('sec-1');
+    expect(http.get.mock.calls[0][0]).toBe('/v1/secrets/sec-1/fields');
+    expect(result.fields).toEqual(['host', 'password', 'username']);
+  });
+});
+
+// SECRET-06: canDecrypt POSTs /v1/secrets/:id/can-decrypt with EMPTY body (self-check only)
+describe('SecretsClient canDecrypt (SECRET-06)', () => {
+  let client: SecretsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({ client, http } = makeClient()));
+
+  it('POSTs /v1/secrets/:id/can-decrypt with {} body', async () => {
+    const verdict = {
+      verdict: 'allowed',
+      simulatedIdentity: { kind: 'self', id: null },
+      secret: { id: 'sec-1', alias: 'db/prod', subType: null, hasReferences: false },
+      self: { verdict: 'allowed' },
+      targets: [],
+      firstDenial: null,
+    };
+    http.post.mockResolvedValue(verdict);
+    const result = await client.canDecrypt('sec-1');
+    const [path, body] = http.post.mock.calls[0] as [string, unknown];
+    expect(path).toBe('/v1/secrets/sec-1/can-decrypt');
+    expect(body).toEqual({});
+    expect(result.verdict).toBe('allowed');
+  });
+
+  it('returns a denied verdict as a successful result (no throw)', async () => {
+    http.post.mockResolvedValue({
+      verdict: 'denied',
+      simulatedIdentity: { kind: 'self', id: null },
+      secret: { id: 'sec-1', alias: 'db/prod', subType: null, hasReferences: true },
+      self: { verdict: 'denied', reason: 'missing secret:read:value' },
+      targets: [{ alias: 'db/root', verdict: 'denied', reason: 'no grant' }],
+      firstDenial: { alias: 'db/root', reason: 'no grant' },
+    });
+    const result = await client.canDecrypt('sec-1');
+    expect(result.verdict).toBe('denied');
+    expect(result.firstDenial?.alias).toBe('db/root');
+  });
+});

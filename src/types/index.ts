@@ -1532,3 +1532,34 @@ export interface SshCertificateFilter {
   limit?: number;
   offset?: number;
 }
+
+// ============================================================================
+// Secret fields (keys-only) + can-decrypt preflight (v4.3.0)
+// ============================================================================
+
+/** Response of GET /v1/secrets/:id/fields — top-level key names only, never values. */
+export interface SecretFieldsResponse {
+  fields: string[];
+}
+
+export type CanDecryptVerdict = 'allowed' | 'denied' | 'conditional' | 'indeterminate';
+
+export interface CanDecryptCheck {
+  verdict: CanDecryptVerdict;
+  conditionalOn?: string[];
+  reason?: string;
+}
+
+export interface CanDecryptTargetCheck extends CanDecryptCheck {
+  alias?: string | null;
+}
+
+/** Response of POST /v1/secrets/:id/can-decrypt (self-check form). Never contains values. */
+export interface CanDecryptResult {
+  verdict: CanDecryptVerdict;
+  simulatedIdentity: { kind: 'apikey' | 'user' | 'self'; id?: string | null };
+  secret: { id: string; alias: string; subType?: string | null; hasReferences: boolean };
+  self: CanDecryptCheck;
+  targets: CanDecryptTargetCheck[];
+  firstDenial?: { alias?: string | null; reason?: string } | null;
+}

@@ -16,6 +16,8 @@ import type {
   PublishResult,
   PublicKeyInfo,
   PublicKeyList,
+  SecretFieldsResponse,
+  CanDecryptResult,
 } from '../types/index.js';
 
 export class SecretsClient {
@@ -46,6 +48,23 @@ export class SecretsClient {
 
   async decrypt(id: string): Promise<SecretWithData> {
     return this.http.post<SecretWithData>(`/v1/secrets/${id}/decrypt`);
+  }
+
+  /**
+   * List a secret's top-level field (key) names — never values.
+   * Requires secret:read:metadata (not read:value).
+   */
+  async getFields(id: string): Promise<SecretFieldsResponse> {
+    return this.http.get<SecretFieldsResponse>(`/v1/secrets/${id}/fields`);
+  }
+
+  /**
+   * Preflight whether the CALLER could decrypt this secret (and its reference
+   * graph). Self-check only; returns a verdict, never a value. A 'denied'
+   * verdict is a successful response, not an error.
+   */
+  async canDecrypt(id: string): Promise<CanDecryptResult> {
+    return this.http.post<CanDecryptResult>(`/v1/secrets/${id}/can-decrypt`, {});
   }
 
   async update(id: string, request: UpdateSecretRequest): Promise<Secret> {
