@@ -26,6 +26,27 @@ describe('AuthClient field-name contracts (mocked HTTP)', () => {
 
   beforeEach(() => ({ client, http } = makeClient()));
 
+  it('revokes the current server session before clearing local tokens', async () => {
+    http.post.mockResolvedValue({message: 'Logged out'});
+    await client.logout();
+    expect(http.post).toHaveBeenCalledWith('/auth/logout', {});
+    expect(http.clearTokens).toHaveBeenCalledOnce();
+    expect(http.post.mock.invocationCallOrder[0]).toBeLessThan(http.clearTokens.mock.invocationCallOrder[0]);
+  });
+
+  it('clears local tokens even when current-session revocation fails', async () => {
+    http.post.mockRejectedValue(new Error('server unavailable'));
+    await expect(client.logout()).rejects.toThrow('server unavailable');
+    expect(http.clearTokens).toHaveBeenCalledOnce();
+  });
+
+  it('revokes every server session and always clears local tokens', async () => {
+    http.post.mockResolvedValue({message: 'Logged out everywhere'});
+    await client.logoutAll();
+    expect(http.post).toHaveBeenCalledWith('/auth/logout-all', {});
+    expect(http.clearTokens).toHaveBeenCalledOnce();
+  });
+
   // AUTH-01: login sends totpCode (camelCase), not totp_code
   it('AUTH-01: login sends totpCode (camelCase)', async () => {
     http.post.mockResolvedValue({ accessToken: 'a', refreshToken: 'r', expiresIn: 3600, tokenType: 'Bearer' });

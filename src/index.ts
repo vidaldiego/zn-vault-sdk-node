@@ -161,17 +161,19 @@ export class ZnVaultClient {
     return result;
   }
 
-  /**
-   * Logout and clear stored tokens.
-   *
-   * Kept `async` to preserve the `Promise<void>` return type that callers
-   * `await`, even though the underlying operations are currently synchronous.
-   */
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async logout() {
+  /** Revoke the current server session and clear stored tokens. */
+  async logout(): Promise<void> {
     try {
-      // AuthClient.logout() is synchronous (returns void); no await needed.
-      this._auth.logout();
+      await this._auth.logout();
+    } finally {
+      this.httpClient.clearTokens();
+    }
+  }
+
+  /** Revoke every server session for the user and clear stored tokens. */
+  async logoutAll(): Promise<void> {
+    try {
+      await this._auth.logoutAll();
     } finally {
       this.httpClient.clearTokens();
     }
