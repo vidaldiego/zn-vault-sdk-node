@@ -73,18 +73,14 @@ jobs:
       # The parent repo contains the server source and docker/Dockerfile.sdk-test
       # which is needed to build the vault image used by docker-compose.e2e.yml.
       #
-      # NOTE: if vidaldiego/zn-vault is private, the default GITHUB_TOKEN only
-      # grants access to the current repository. In that case, create a PAT with
-      # `contents: read` on the parent repo, store it as a repository secret
-      # (e.g. ZN_VAULT_REPO_TOKEN), and pass it via:
-      #   token: ${{ secrets.ZN_VAULT_REPO_TOKEN }}
-      # The default below uses GITHUB_TOKEN and will fail for private parent repos.
+      # The parent is private. Use the dedicated read-only deploy key installed
+      # for this workflow; never reuse a broad user PAT here.
       - name: Checkout parent repo (zn-vault server)
         uses: actions/checkout@v4
         with:
           repository: vidaldiego/zn-vault
           path: zn-vault
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh-key: ${{ secrets.ZN_VAULT_REPO_DEPLOY_KEY }}
 
       # Step 2 — Check out THIS repo nested inside the parent, recreating the
       # monorepo layout: zn-vault/zn-vault-sdk-node/
