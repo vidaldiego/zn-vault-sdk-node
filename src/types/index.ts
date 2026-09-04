@@ -516,6 +516,10 @@ export interface Secret {
   type: SecretType;
   subType?: SecretSubType | null;
   version: number;
+  /** Cryptographic protection branch used for this value. */
+  protectionMode?: 'STANDARD' | 'USER_SESSION_ONLY';
+  /** Number of users holding a wrapped Secret Access Key grant. */
+  grantCount?: number;
   /** File metadata (queryable without decryption) */
   fileName?: string | null;
   fileSize?: number | null;
@@ -557,6 +561,10 @@ export interface CreateSecretRequest {
   tags?: string[];
   /** MIME type for settings/files */
   contentType?: string;
+  /** Use USER_SESSION_ONLY to create a User-Sealed Secret. */
+  protectionMode?: 'STANDARD' | 'USER_SESSION_ONLY';
+  /** Users receiving wrapped SAK grants at creation time. */
+  grantUserIds?: string[];
 }
 
 /**
@@ -590,6 +598,7 @@ export interface SecretFilter {
   tags?: string[];
   /** Filter by alias prefix (e.g., "web/*") */
   aliasPrefix?: string;
+  protectionMode?: 'STANDARD' | 'USER_SESSION_ONLY';
   limit?: number;
   offset?: number;
 }
@@ -1562,4 +1571,12 @@ export interface CanDecryptResult {
   self: CanDecryptCheck;
   targets: CanDecryptTargetCheck[];
   firstDenial?: { alias?: string | null; reason?: string } | null;
+}
+
+/** Metadata for a User-Sealed wrapped-SAK grant; never contains key material. */
+export interface UserSealedGrant {
+  userId: string;
+  username: string;
+  createdAt: string;
+  status: 'CURRENT' | 'STALE' | 'INACTIVE';
 }

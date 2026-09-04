@@ -269,3 +269,45 @@ describe('SecretsClient canDecrypt (SECRET-06)', () => {
     expect(result.firstDenial?.alias).toBe('db/root');
   });
 });
+
+describe('SecretsClient User-Sealed contract', () => {
+  let client: SecretsClient; let http: ReturnType<typeof makeClient>['http'];
+  beforeEach(() => ({client, http} = makeClient()));
+
+  it('creates with explicit protection mode and grant users', async () => {
+    http.post.mockResolvedValue({id: 'sealed-1'});
+    await client.create({
+      alias: 'hardware/yubikey-pin',
+      type: 'credential',
+      data: {pin: 'redacted'},
+      protectionMode: 'USER_SESSION_ONLY',
+      grantUserIds: ['user-a'],
+    });
+    expect(http.post).toHaveBeenCalledWith('/v1/secrets', expect.objectContaining({
+      protectionMode: 'USER_SESSION_ONLY',
+      grantUserIds: ['user-a'],
+    }));
+  });
+
+  it('uses the documented grant and root-recovery routes', async () => {
+    http.get.mockResolvedValue({items: [], rootRecoveryAvailable: false, isTenantRoot: false});
+    http.post.mockResolvedValue({secretId: 'sealed/1', userId: 'user/a'});
+    http.put.mockResolvedValue({enabled: true});
+
+    await client.listUserSealedGrants('sealed/1');
+    await client.grantUserSealedAccess('sealed/1', 'user/a');
+    await client.revokeUserSealedAccess('sealed/1', 'user/a');
+    await client.recoverUserSealedSecret('sealed/1');
+    await client.recoverAndGrantUserSealedAccess('sealed/1', 'user/a');
+    await client.getUserSealedRecoverySetting();
+    await client.setUserSealedRecovery(true);
+
+    expect(http.get).toHaveBeenCalledWith('/v1/secrets/sealed%2F1/user-grants');
+    expect(http.post).toHaveBeenCalledWith('/v1/secrets/sealed%2F1/user-grants', {userId: 'user/a'});
+    expect(http.delete).toHaveBeenCalledWith('/v1/secrets/sealed%2F1/user-grants/user%2Fa');
+    expect(http.post).toHaveBeenCalledWith('/v1/secrets/sealed%2F1/root-recover', {});
+    expect(http.post).toHaveBeenCalledWith('/v1/secrets/sealed%2F1/root-recover/user-grants', {userId: 'user/a'});
+    expect(http.get).toHaveBeenCalledWith('/v1/tenant/user-sealed-settings');
+    expect(http.put).toHaveBeenCalledWith('/v1/tenant/user-sealed-settings', {rootRecoveryEnabled: true});
+  });
+});

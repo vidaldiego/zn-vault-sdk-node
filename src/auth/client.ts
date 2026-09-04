@@ -131,8 +131,22 @@ export class AuthClient {
     });
   }
 
-  logout(): void {
-    this.http.clearTokens();
+  /** Revoke the current server session, then clear local credentials. */
+  async logout(): Promise<void> {
+    try {
+      await this.http.post('/auth/logout', {});
+    } finally {
+      this.http.clearTokens();
+    }
+  }
+
+  /** Revoke every server session for the user, then clear local credentials. */
+  async logoutAll(): Promise<void> {
+    try {
+      await this.http.post('/auth/logout-all', {});
+    } finally {
+      this.http.clearTokens();
+    }
   }
 
   // API Keys

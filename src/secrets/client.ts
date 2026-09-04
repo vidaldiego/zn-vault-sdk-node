@@ -18,6 +18,7 @@ import type {
   PublicKeyList,
   SecretFieldsResponse,
   CanDecryptResult,
+  UserSealedGrant,
 } from '../types/index.js';
 
 export class SecretsClient {
@@ -34,6 +35,8 @@ export class SecretsClient {
       ttlUntil: request.ttlUntil,
       tags: request.tags,
       contentType: request.contentType,
+      protectionMode: request.protectionMode,
+      grantUserIds: request.grantUserIds,
     });
   }
 
@@ -104,6 +107,7 @@ export class SecretsClient {
     if (filter?.expiringBefore) params.set('expiringBefore', filter.expiringBefore);
     // Note: the server's /v1/secrets querystring does not accept a `tags` param — omit it.
     if (filter?.aliasPrefix) params.set('aliasPrefix', filter.aliasPrefix);
+    if (filter?.protectionMode) params.set('protectionMode', filter.protectionMode);
     if (filter?.limit) params.set('limit', filter.limit.toString());
     if (filter?.offset) params.set('offset', filter.offset.toString());
 
@@ -126,6 +130,47 @@ export class SecretsClient {
 
   async decryptVersion(id: string, version: number): Promise<SecretWithData> {
     return this.http.post<SecretWithData>(`/v1/secrets/${id}/history/${version}/decrypt`);
+  }
+
+  /** List users holding a wrapped Secret Access Key grant. */
+  async listUserSealedGrants(id: string): Promise<{
+    items: UserSealedGrant[];
+    rootRecoveryAvailable: boolean;
+    isTenantRoot: boolean;
+  }> {
+    return this.http.get(`/v1/secrets/${encodeURIComponent(id)}/user-grants`);
+  }
+
+  /** Grant a user access from a password-authenticated human session. */
+  async grantUserSealedAccess(id: string, userId: string): Promise<{secretId: string; userId: string}> {
+    return this.http.post(`/v1/secrets/${encodeURIComponent(id)}/user-grants`, {userId});
+  }
+
+  /** Revoke a user's wrapped SAK grant. */
+  async revokeUserSealedAccess(id: string, userId: string): Promise<void> {
+    await this.http.delete(`/v1/secrets/${encodeURIComponent(id)}/user-grants/${encodeURIComponent(userId)}`);
+  }
+
+  /** Explicitly decrypt through tenant-root recovery. */
+  async recoverUserSealedSecret(id: string): Promise<SecretWithData> {
+    return this.http.post(`/v1/secrets/${encodeURIComponent(id)}/root-recover`, {});
+  }
+
+  /** Recover the SAK as tenant root and issue a user grant. */
+  async recoverAndGrantUserSealedAccess(id: string, userId: string): Promise<{
+    secretId: string;
+    userId: string;
+    viaRootRecovery: true;
+  }> {
+    return this.http.post(`/v1/secrets/${encodeURIComponent(id)}/root-recover/user-grants`, {userId});
+  }
+
+  async getUserSealedRecoverySetting(): Promise<{enabled: boolean}> {
+    return this.http.get('/v1/tenant/user-sealed-settings');
+  }
+
+  async setUserSealedRecovery(enabled: boolean): Promise<{enabled: boolean}> {
+    return this.http.put('/v1/tenant/user-sealed-settings', {rootRecoveryEnabled: enabled});
   }
 
   // ============================================================================
