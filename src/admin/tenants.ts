@@ -15,7 +15,7 @@ export class TenantsClient {
   constructor(private http: HttpClient) {}
 
   async create(request: CreateTenantRequest): Promise<Tenant> {
-    return this.http.post<Tenant>('/v1/tenants', {
+    return this.http.post<Tenant>('/v1/superadmin/tenants', {
       id: request.id,
       name: request.name,
       max_secrets: request.maxSecrets,
@@ -28,11 +28,11 @@ export class TenantsClient {
   }
 
   async get(id: string): Promise<Tenant> {
-    return this.http.get<Tenant>(`/v1/tenants/${id}`);
+    return this.http.get<Tenant>(`/v1/superadmin/tenants/${id}`);
   }
 
   async update(id: string, request: UpdateTenantRequest): Promise<Tenant> {
-    return this.http.patch<Tenant>(`/v1/tenants/${id}`, {
+    return this.http.patch<Tenant>(`/v1/superadmin/tenants/${id}`, {
       name: request.name,
       max_secrets: request.maxSecrets,
       max_kms_keys: request.maxKmsKeys,
@@ -43,7 +43,7 @@ export class TenantsClient {
   }
 
   async delete(id: string): Promise<void> {
-    await this.http.delete(`/v1/tenants/${id}`);
+    await this.http.delete(`/v1/superadmin/tenants/${id}`);
   }
 
   async list(filter?: TenantFilter): Promise<PaginatedResponse<Tenant>> {
@@ -56,23 +56,23 @@ export class TenantsClient {
     if (filter?.offset) params.set('offset', filter.offset.toString());
 
     const query = params.toString();
-    const path = query ? `/v1/tenants?${query}` : '/v1/tenants';
+    const path = query ? `/v1/superadmin/tenants?${query}` : '/v1/superadmin/tenants';
     return this.http.get<PaginatedResponse<Tenant>>(path);
   }
 
   async setStatus(id: string, status: TenantStatus): Promise<Tenant> {
-    return this.http.put<Tenant>(`/v1/tenants/${id}/status`, { status });
+    return this.http.put<Tenant>(`/v1/superadmin/tenants/${id}/status`, { status });
   }
 
   async getUsage(id: string): Promise<TenantUsage> {
-    return this.http.get<TenantUsage>(`/v1/tenants/${id}/usage`);
+    return this.http.get<TenantUsage>(`/v1/superadmin/tenants/${id}/usage`);
   }
 
   async checkQuota(
     id: string,
     resourceType: 'secrets' | 'kms_keys' | 'users' | 'api_keys'
   ): Promise<{ resourceType: string; current: number; limit: number | null; allowed: boolean }> {
-    return this.http.get(`/v1/tenants/${id}/quota/${resourceType}`);
+    return this.http.get(`/v1/superadmin/tenants/${id}/quota/${resourceType}`);
   }
 
   async suspend(id: string): Promise<Tenant> {
