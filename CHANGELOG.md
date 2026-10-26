@@ -4,6 +4,10 @@ All notable changes to `@zincapp/znvault-sdk` are documented here.
 
 ---
 
+## 4.4.1 — 2026-10-26
+
+- Route superadmin tenant management directly to `/v1/superadmin/tenants`, compatible with the server tenant-isolation hotfix.
+
 ## 4.2.0 — 2026-06-24
 
 ### ⚠️ Contract fixes (behavior-changing)
