@@ -79,6 +79,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: vidaldiego/zn-vault
+          # Exact audit-contract candidate; update only with its CI evidence.
+          ref: 022899f5ae1524ba753d3fa5e5ff1e01df731c6d
           path: zn-vault
           ssh-key: ${{ secrets.ZN_VAULT_REPO_DEPLOY_KEY }}
 
@@ -88,6 +90,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: zn-vault/zn-vault-sdk-node
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact server and SDK candidates
+        env:
+          SDK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C zn-vault rev-parse HEAD)" = 022899f5ae1524ba753d3fa5e5ff1e01df731c6d
+          test "$(git -C zn-vault/zn-vault-sdk-node rev-parse HEAD)" = "$SDK_SHA"
+          git -C zn-vault rev-parse HEAD
+          git -C zn-vault/zn-vault-sdk-node rev-parse HEAD
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -1,3 +1,4 @@
+import type { AuditVerificationEvidence } from '../audit-verification.js';
 // Path: zn-vault-sdk-node/src/types/index.ts
 
 // ============================================================================
@@ -1089,11 +1090,11 @@ export interface AuditStats {
   recentFailures: Array<{ timestamp: string; action: string; actor: string; resource: string }>;
 }
 
-export interface AuditVerifyResult {
+export interface AuditVerifyResult extends AuditVerificationEvidence {
   valid: boolean;
   errors: string[];
   checkedEntries: number;
-  lastVerified: string;
+  lastVerified?: string;
 }
 
 /**

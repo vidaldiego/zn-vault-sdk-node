@@ -179,4 +179,27 @@ describe.skipIf(!isIntegrationEnabled)('E2E: Audit — contract fixes AUDIT-02/0
 
     console.log(`AUDIT-02 filter pass: LOGIN entries=${response.items.length}`);
   });
+  it('global verification preserves evidence through the real API and SDK', async () => {
+    expect(serverUnreachable, 'the isolated E2E server must be available').toBe(false);
+    const globalClient = await TestConfig.createSuperadminClient();
+    const result = await globalClient.audit.verify();
+    expect(result.status).toBe('verified');
+    expect(result.valid).toBe(true);
+    expect(result.scope).toBe('retained');
+    expect(result.completed).toBe(true);
+    expect(result.historicalCompleteness).toBe('not_proven');
+    expect(result.readEntries).toBeGreaterThan(0);
+    expect(result.authenticatedEntries).toBe(result.readEntries);
+    expect(result.checkedEntries).toBe(result.authenticatedEntries);
+    expect(result.unverifiedEntries).toBe(0);
+    expect(result.interval?.firstId).toBeTypeOf('number');
+    expect(result.interval?.lastId).toBeTypeOf('number');
+    expect(result.finishedAt).toBeTypeOf('string');
+  });
+
+  it('tenant credentials cannot retrieve global verification diagnostics', async () => {
+    expect(serverUnreachable, 'the isolated E2E server must be available').toBe(false);
+    await expect(adminClient.audit.verify()).rejects.toMatchObject({ statusCode: 403 });
+  });
+
 });

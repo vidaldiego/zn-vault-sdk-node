@@ -46,6 +46,12 @@ cmd_run() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+  # Refuse a skipped integration suite or a target outside this isolated stack.
+  if [ "${ZNVAULT_BASE_URL:-}" != "$VAULT_URL" ]; then
+    echo "ERROR: seeded ZNVAULT_BASE_URL must equal the isolated Vault URL." >&2
+    cmd_down
+    return 1
+  fi
   local code=0
   npx vitest run --config vitest.e2e.config.ts || code=$?
   if [ "$keep" != "--keep" ]; then cmd_down; fi
