@@ -1,3 +1,4 @@
+import { normalizeAuditVerification } from '../audit-verification.js';
 // Path: zn-vault-sdk-node/src/audit/client.ts
 
 import type { HttpClient } from '../http/client.js';
@@ -39,7 +40,7 @@ export class AuditClient {
    * Returns validation status, any errors found, and a timestamp.
    */
   async verify(): Promise<AuditVerifyResult> {
-    return this.http.get<AuditVerifyResult>('/v1/audit/verify');
+    return normalizeAuditVerification(await this.http.get<AuditVerifyResult>('/v1/superadmin/audit/verify'));
   }
 
   /**

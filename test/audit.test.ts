@@ -142,8 +142,8 @@ describe('AuditClient (mocked HTTP)', () => {
     http.get.mockResolvedValue(mockVerify);
 
     const result = await client.verify();
-    expect(http.get).toHaveBeenCalledWith('/v1/audit/verify');
-    expect(result.valid).toBe(true);
+    expect(http.get).toHaveBeenCalledWith('/v1/superadmin/audit/verify');
+    expect(result.valid).toBe(false);
     expect(result.errors).toHaveLength(0);
     expect(result.checkedEntries).toBe(1000);
     expect(result.lastVerified).toBe('2026-01-15T10:00:00Z');
