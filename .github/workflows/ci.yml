@@ -80,7 +80,7 @@ jobs:
         with:
           repository: vidaldiego/zn-vault
           # Exact audit-contract candidate; update only with its CI evidence.
-          ref: 6610c2c01ddc5bf110eccba9a92719c9a2f805b2
+          ref: 036bc60ebaddd06b9c9b862725fb410baed3503c
           path: zn-vault
           ssh-key: ${{ secrets.ZN_VAULT_REPO_DEPLOY_KEY }}
 
@@ -97,7 +97,7 @@ jobs:
           SDK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          test "$(git -C zn-vault rev-parse HEAD)" = 6610c2c01ddc5bf110eccba9a92719c9a2f805b2
+          test "$(git -C zn-vault rev-parse HEAD)" = 036bc60ebaddd06b9c9b862725fb410baed3503c
           test "$(git -C zn-vault/zn-vault-sdk-node rev-parse HEAD)" = "$SDK_SHA"
           git -C zn-vault rev-parse HEAD
           git -C zn-vault/zn-vault-sdk-node rev-parse HEAD
